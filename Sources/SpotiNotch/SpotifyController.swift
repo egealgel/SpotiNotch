@@ -91,6 +91,16 @@ final class SpotifyController: ObservableObject {
         position = min(syncedPosition + elapsed, duration)
     }
 
+    /// Computes the current playback position at `date` without waiting for
+    /// the next poll/tick — call this from a `TimelineView` for a genuinely
+    /// smooth (not stepped) progress bar, since it can be evaluated on every
+    /// frame instead of only every 0.25s.
+    func livePosition(at date: Date = Date()) -> Double {
+        guard isPlaying, !isScrubbing, duration > 0 else { return position }
+        let elapsed = date.timeIntervalSince(syncedAt)
+        return min(syncedPosition + elapsed, duration)
+    }
+
     // MARK: - Commands
 
     func playPause() {

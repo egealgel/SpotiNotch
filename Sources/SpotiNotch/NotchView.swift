@@ -77,58 +77,66 @@ struct NotchView: View {
     }
 
     private var progressBar: some View {
-        HStack(spacing: 8) {
-            Text(timeString(spotify.position))
-                .font(.system(size: 12, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.5))
+        // Redraws up to 10x/second so the fill and the elapsed-time label
+        // advance continuously instead of visibly stepping once every 0.25s
+        // (matching the technique boring.notch uses for its own slider: derive
+        // the live position from elapsed wall-clock time each frame, rather
+        // than waiting on a periodic Timer to mutate published state).
+        TimelineView(.animation(minimumInterval: spotify.isPlaying && !spotify.isScrubbing ? 0.1 : nil)) { timeline in
+            let livePosition = spotify.livePosition(at: timeline.date)
 
-            GeometryReader { geo in
-                let frac = spotify.duration > 0 ? min(spotify.position / spotify.duration, 1) : 0
-                let fillWidth = max(0, geo.size.width * frac)
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.22))
-                        .frame(height: 6)
-                    Capsule().fill(Color.white.opacity(0.85))
-                        .frame(width: fillWidth, height: 6)
-                        .animation(spotify.isScrubbing ? nil : .linear(duration: 0.25), value: frac)
-                    // A thumb only appears while actively dragging, popping in
-                    // for a tactile "grabbed" feel, and follows the finger 1:1.
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 14, height: 14)
-                        .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
-                        .offset(x: fillWidth - 7)
-                        .opacity(spotify.isScrubbing ? 1 : 0)
-                        .scaleEffect(spotify.isScrubbing ? 1 : 0.4)
-                        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: spotify.isScrubbing)
+            HStack(spacing: 8) {
+                Text(timeString(livePosition))
+                    .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.5))
+
+                GeometryReader { geo in
+                    let frac = spotify.duration > 0 ? min(livePosition / spotify.duration, 1) : 0
+                    let fillWidth = max(0, geo.size.width * frac)
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.22))
+                            .frame(height: 6)
+                        Capsule().fill(Color.white.opacity(0.85))
+                            .frame(width: fillWidth, height: 6)
+                        // A thumb only appears while actively dragging, popping in
+                        // for a tactile "grabbed" feel, and follows the finger 1:1.
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 14, height: 14)
+                            .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
+                            .offset(x: fillWidth - 7)
+                            .opacity(spotify.isScrubbing ? 1 : 0)
+                            .scaleEffect(spotify.isScrubbing ? 1 : 0.4)
+                            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: spotify.isScrubbing)
+                    }
+                    .frame(maxHeight: .infinity, alignment: .center)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        // Larger invisible hit area than the thin 4pt bar, so the
+                        // track is comfortable to grab and drag.
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                guard spotify.duration > 0 else { return }
+                                spotify.isScrubbing = true
+                                let frac = min(max(0, value.location.x / geo.size.width), 1)
+                                spotify.seekLive(frac * spotify.duration)
+                            }
+                            .onEnded { value in
+                                guard spotify.duration > 0 else { return }
+                                let frac = min(max(0, value.location.x / geo.size.width), 1)
+                                spotify.seek(to: frac * spotify.duration)
+                                spotify.isScrubbing = false
+                            }
+                    )
                 }
-                .frame(maxHeight: .infinity, alignment: .center)
-                .contentShape(Rectangle())
-                .gesture(
-                    // Larger invisible hit area than the thin 4pt bar, so the
-                    // track is comfortable to grab and drag.
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            guard spotify.duration > 0 else { return }
-                            spotify.isScrubbing = true
-                            let frac = min(max(0, value.location.x / geo.size.width), 1)
-                            spotify.seekLive(frac * spotify.duration)
-                        }
-                        .onEnded { value in
-                            guard spotify.duration > 0 else { return }
-                            let frac = min(max(0, value.location.x / geo.size.width), 1)
-                            spotify.seek(to: frac * spotify.duration)
-                            spotify.isScrubbing = false
-                        }
-                )
-            }
-            .frame(height: 20)
+                .frame(height: 20)
 
-            Text(timeString(spotify.duration))
-                .font(.system(size: 12, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.5))
+                Text(timeString(spotify.duration))
+                    .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.5))
+            }
         }
     }
 
@@ -150,14 +158,13 @@ struct NotchView: View {
     /// A dedicated view (rather than reusing `icon`) so the play/pause glyph
     /// can crossfade with a little pop instead of flipping instantly.
     private var playPauseButton: some View {
-        Button(action: spotify.playPause) {
+        HoverIconButton(system: spotify.isPlaying ? "pause.fill" : "play.fill", size: 23, action: spotify.playPause) {
             Image(systemName: spotify.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 26, weight: .semibold))
+                .font(.system(size: 23, weight: .semibold))
                 .foregroundStyle(.white)
                 .id(spotify.isPlaying)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
         }
-        .buttonStyle(PressableIconStyle())
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: spotify.isPlaying)
     }
 
@@ -179,22 +186,20 @@ struct NotchView: View {
     }
 
     private func icon(_ system: String, size: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        HoverIconButton(system: system, size: size, action: action) {
             Image(systemName: system)
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .buttonStyle(PressableIconStyle())
     }
 
     private func iconToggle(_ system: String, on: Bool, size: CGFloat, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        HoverIconButton(system: system, size: size, action: action) {
             Image(systemName: system)
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(on ? spotifyGreen : .white.opacity(0.4))
                 .animation(.easeOut(duration: 0.18), value: on)
         }
-        .buttonStyle(PressableIconStyle())
     }
 
     private func timeString(_ seconds: Double) -> String {
@@ -210,6 +215,33 @@ private struct PressableIconStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.85 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.55), value: configuration.isPressed)
+    }
+}
+
+/// An icon button with a soft capsule that fades in on hover, adapted from
+/// boring.notch's `HoverButton` — gives the controls the same tactile,
+/// "alive" feel as that app, on top of the existing press-scale feedback.
+private struct HoverIconButton<Content: View>: View {
+    let system: String
+    var size: CGFloat = 16
+    let action: () -> Void
+    @ViewBuilder let content: () -> Content
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Capsule()
+                    .fill(isHovering ? Color.white.opacity(0.14) : .clear)
+                content()
+            }
+            .frame(width: size * 2.1, height: size * 2.1)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(PressableIconStyle())
+        .onHover { hovering in
+            withAnimation(.smooth(duration: 0.3)) { isHovering = hovering }
+        }
     }
 }
 
