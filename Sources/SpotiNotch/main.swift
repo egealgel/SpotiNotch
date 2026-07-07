@@ -86,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ? self.cardFrame.contains(mouse)   // already open: generous zone
                 : self.notchFrame.contains(mouse)  // closed: precise trigger
             if wantsExpanded != self.state.isExpanded {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                     self.state.isExpanded = wantsExpanded
                 }
                 // Only accept clicks while expanded, so the collapsed notch

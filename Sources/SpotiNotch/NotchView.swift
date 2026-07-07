@@ -25,9 +25,12 @@ struct NotchView: View {
                     width: state.isExpanded ? cardWidth : notchWidth,
                     height: state.isExpanded ? cardHeight : notchHeight
                 )
+                .animation(.spring(response: 0.45, dampingFraction: 0.82), value: state.isExpanded)
 
             content
                 .opacity(state.isExpanded ? 1 : 0)
+                .scaleEffect(state.isExpanded ? 1 : 0.92, anchor: .top)
+                .animation(.easeOut(duration: state.isExpanded ? 0.32 : 0.16), value: state.isExpanded)
         }
         .frame(width: cardWidth, height: cardHeight, alignment: .top)
     }
@@ -80,11 +83,32 @@ struct NotchView: View {
                 let frac = spotify.duration > 0 ? min(spotify.position / spotify.duration, 1) : 0
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.22))
+                        .frame(height: 4)
                     Capsule().fill(Color.white.opacity(0.85))
-                        .frame(width: max(0, geo.size.width * frac))
+                        .frame(width: max(0, geo.size.width * frac), height: 4)
+                        .animation(spotify.isScrubbing ? nil : .linear(duration: 0.25), value: frac)
                 }
+                .frame(maxHeight: .infinity, alignment: .center)
+                .contentShape(Rectangle())
+                .gesture(
+                    // Larger invisible hit area than the thin 4pt bar, so the
+                    // track is comfortable to grab and drag.
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            guard spotify.duration > 0 else { return }
+                            spotify.isScrubbing = true
+                            let frac = min(max(0, value.location.x / geo.size.width), 1)
+                            spotify.seekLive(frac * spotify.duration)
+                        }
+                        .onEnded { value in
+                            guard spotify.duration > 0 else { return }
+                            let frac = min(max(0, value.location.x / geo.size.width), 1)
+                            spotify.seek(to: frac * spotify.duration)
+                            spotify.isScrubbing = false
+                        }
+                )
             }
-            .frame(height: 4)
+            .frame(height: 20)
 
             HStack {
                 Text(timeString(spotify.position))
@@ -103,13 +127,27 @@ struct NotchView: View {
             Spacer(minLength: 0)
             icon("backward.fill", size: 22, action: spotify.previous)
             Spacer(minLength: 0)
-            icon(spotify.isPlaying ? "pause.fill" : "play.fill", size: 26, action: spotify.playPause)
+            playPauseButton
             Spacer(minLength: 0)
             icon("forward.fill", size: 22, action: spotify.next)
             Spacer(minLength: 0)
             iconToggle("repeat", on: spotify.isRepeating, size: 15, action: spotify.toggleRepeat)
         }
         .padding(.top, 2)
+    }
+
+    /// A dedicated view (rather than reusing `icon`) so the play/pause glyph
+    /// can crossfade with a little pop instead of flipping instantly.
+    private var playPauseButton: some View {
+        Button(action: spotify.playPause) {
+            Image(systemName: spotify.isPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundStyle(.white)
+                .id(spotify.isPlaying)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+        }
+        .buttonStyle(PressableIconStyle())
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: spotify.isPlaying)
     }
 
     // MARK: - Pieces
@@ -135,7 +173,7 @@ struct NotchView: View {
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(.white)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableIconStyle())
     }
 
     private func iconToggle(_ system: String, on: Bool, size: CGFloat, action: @escaping () -> Void) -> some View {
@@ -143,14 +181,24 @@ struct NotchView: View {
             Image(systemName: system)
                 .font(.system(size: size, weight: .semibold))
                 .foregroundStyle(on ? spotifyGreen : .white.opacity(0.4))
+                .animation(.easeOut(duration: 0.18), value: on)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableIconStyle())
     }
 
     private func timeString(_ seconds: Double) -> String {
         guard seconds.isFinite, seconds >= 0 else { return "0:00" }
         let t = Int(seconds)
         return String(format: "%d:%02d", t / 60, t % 60)
+    }
+}
+
+/// Scales a control down slightly while pressed for tactile feedback.
+private struct PressableIconStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
 
