@@ -40,7 +40,7 @@ https://github.com/user-attachments/assets/8f9a95ce-346c-444b-ad53-eaeab3d70577
 3. Launch it — first time, **right-click → Open** (not notarized). Allow the
    **Automation** permission so it can talk to Spotify.
 
-**To quit / disable:** System Settings → General → Login Items, or drag the app
+**To quit / disable:** Right click on the widget → Quit SpotiNotch or System Settings → General → Login Items, or drag the app
 to the Trash.
 
 ## Build from source
