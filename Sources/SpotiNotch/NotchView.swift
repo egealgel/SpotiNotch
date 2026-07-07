@@ -15,74 +15,54 @@ struct NotchView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            BottomRoundedRectangle(radius: 22).fill(.black)
+            BottomRoundedRectangle(radius: state.isExpanded ? 24 : 10).fill(.black)
 
-            VStack(spacing: 0) {
-                topStrip
-                if state.isExpanded {
-                    expandedBody
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
+            // Collapsed shows nothing — it just blends in as the notch. The full
+            // player only appears when expanded (on hover).
+            if state.isExpanded {
+                expandedBody
+                    .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .contentShape(BottomRoundedRectangle(radius: 22))
+        .contentShape(Rectangle())
         .onHover { hovering in
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                 state.isExpanded = hovering
             }
         }
     }
 
-    // MARK: - Collapsed top strip (hugs the notch)
-
-    private var topStrip: some View {
-        HStack(spacing: 0) {
-            artwork(size: notchHeight - 8)
-                .frame(width: max(notchHeight, 42), alignment: .center)
-
-            Spacer(minLength: notchWidth)
-
-            Group {
-                if hasTrack && spotify.isPlaying {
-                    Equalizer()
-                } else {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-            }
-            .frame(width: max(notchHeight, 42), alignment: .center)
-        }
-        .frame(height: notchHeight)
-        .padding(.horizontal, 8)
-    }
-
-    // MARK: - Expanded body (revealed on hover)
+    // MARK: - Expanded body (revealed on hover, below the notch)
 
     private var expandedBody: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                artwork(size: 46)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(hasTrack ? spotify.title : "Nothing playing")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                    Text(hasTrack ? spotify.artist : (spotify.isRunning ? "" : "Spotify isn’t running"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-            }
+        VStack(spacing: 0) {
+            // Leave the physical notch clear at the top.
+            Color.clear.frame(height: notchHeight)
 
-            progressBar
-            controls
+            VStack(spacing: 10) {
+                HStack(spacing: 12) {
+                    artwork(size: 46)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(hasTrack ? spotify.title : "Nothing playing")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        Text(hasTrack ? spotify.artist : (spotify.isRunning ? "" : "Spotify isn’t running"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.white.opacity(0.6))
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                progressBar
+                controls
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .padding(.bottom, 14)
         }
-        .padding(.horizontal, 18)
-        .padding(.top, 8)
-        .padding(.bottom, 14)
         .frame(maxWidth: .infinity)
     }
 
@@ -174,6 +154,10 @@ struct NotchView: View {
 /// top edge of the screen.
 struct BottomRoundedRectangle: Shape {
     var radius: CGFloat
+    var animatableData: CGFloat {
+        get { radius }
+        set { radius = newValue }
+    }
     func path(in rect: CGRect) -> Path {
         var p = Path()
         let r = min(radius, min(rect.width, rect.height) / 2)
@@ -190,24 +174,3 @@ struct BottomRoundedRectangle: Shape {
     }
 }
 
-/// Four green bars that bob while music is playing.
-struct Equalizer: View {
-    var body: some View {
-        TimelineView(.animation) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            HStack(spacing: 2.5) {
-                ForEach(0..<4, id: \.self) { i in
-                    Capsule()
-                        .fill(spotifyGreen)
-                        .frame(width: 3, height: barHeight(t, i))
-                }
-            }
-            .frame(height: 16, alignment: .center)
-        }
-    }
-
-    private func barHeight(_ t: Double, _ i: Int) -> CGFloat {
-        let phase = Double(i) * 0.8
-        return 4 + (sin(t * 7 + phase) * 0.5 + 0.5) * 12
-    }
-}

@@ -70,7 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func collapsedFrame(_ screen: NSScreen) -> NSRect {
-        let w = notchSize.width + sidePad * 2
+        // Match the notch exactly so it blends in as a plain notch.
+        let w = notchSize.width
         let h = notchSize.height
         return NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - h, width: w, height: h)
     }
