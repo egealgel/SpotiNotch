@@ -101,8 +101,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Window
 
     private func buildPanel(_ screen: NSScreen, notchSize: CGSize) {
-        let w = max(380, notchSize.width + 92)
-        let h = notchSize.height + 132
+        let w = max(400, notchSize.width + 92)
+        let h = notchSize.height + 180
         let frame = NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - h, width: w, height: h)
         cardFrame = frame
         notchFrame = NSRect(x: screen.frame.midX - notchSize.width / 2,
@@ -121,7 +121,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true   // starts collapsed: fully click-through
 
-        let root = NotchView(notchWidth: notchSize.width, notchHeight: notchSize.height)
+        let root = NotchView(notchWidth: notchSize.width, notchHeight: notchSize.height,
+                             cardWidth: w, cardHeight: h)
             .environmentObject(spotify)
             .environmentObject(state)
         let hosting = NSHostingView(rootView: root)

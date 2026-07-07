@@ -10,11 +10,10 @@ private let spotifyGreen = Color(red: 0.11, green: 0.73, blue: 0.33)
 struct NotchView: View {
     let notchWidth: CGFloat
     let notchHeight: CGFloat
+    let cardWidth: CGFloat
+    let cardHeight: CGFloat
     @EnvironmentObject private var spotify: SpotifyController
     @EnvironmentObject private var state: NotchState
-
-    private let cardWidth: CGFloat = 380
-    private let cardHeight: CGFloat = 172
 
     private var hasTrack: Bool { spotify.isRunning && !spotify.title.isEmpty }
 
@@ -38,70 +37,79 @@ struct NotchView: View {
             // Leave the physical notch clear at the top.
             Color.clear.frame(height: notchHeight)
 
-            VStack(spacing: 12) {
-                HStack(spacing: 10) {
-                    artwork(size: 40)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(hasTrack ? spotify.title : "Nothing playing")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                        Text(hasTrack ? spotify.artist : (spotify.isRunning ? "" : "Spotify isn’t running"))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.55))
+            VStack(spacing: 16) {
+                HStack(spacing: 14) {
+                    artwork(size: 56)
+                    VStack(alignment: .leading, spacing: 3) {
+                        titleLine
+                        Text(hasTrack ? spotify.album : (spotify.isRunning ? "" : "Spotify isn’t running"))
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
                 }
 
-                VStack(spacing: 10) {
-                    progressBar
-                    controls
-                }
+                progressBar
+                controls
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .padding(.bottom, 14)
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+            .padding(.bottom, 18)
         }
         .frame(maxWidth: .infinity)
     }
 
+    /// "Title • Artist" on one line, matching the reference — bold title,
+    /// dimmed separator + artist, truncating together when too long.
+    private var titleLine: some View {
+        (
+            Text(hasTrack ? spotify.title : "Nothing playing")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.white)
+            + Text(hasTrack ? "  •  \(spotify.artist)" : "")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundColor(.white.opacity(0.55))
+        )
+        .lineLimit(1)
+    }
+
     private var progressBar: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 5) {
             GeometryReader { geo in
                 let frac = spotify.duration > 0 ? min(spotify.position / spotify.duration, 1) : 0
                 ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.25))
-                    Capsule().fill(Color.white.opacity(0.95))
+                    Capsule().fill(.white.opacity(0.22))
+                    Capsule().fill(Color.white.opacity(0.85))
                         .frame(width: max(0, geo.size.width * frac))
                 }
             }
-            .frame(height: 3)
+            .frame(height: 4)
 
             HStack {
                 Text(timeString(spotify.position))
                 Spacer()
-                Text(timeString(spotify.duration))
+                Text("-" + timeString(max(0, spotify.duration - spotify.position)))
             }
-            .font(.system(size: 10, weight: .medium))
+            .font(.system(size: 12, weight: .medium))
             .monospacedDigit()
-            .foregroundStyle(.white.opacity(0.55))
+            .foregroundStyle(.white.opacity(0.5))
         }
     }
 
     private var controls: some View {
-        HStack {
-            iconToggle("shuffle", on: spotify.isShuffling, action: spotify.toggleShuffle)
+        HStack(spacing: 0) {
+            iconToggle("shuffle", on: spotify.isShuffling, size: 15, action: spotify.toggleShuffle)
             Spacer(minLength: 0)
-            icon("backward.fill", size: 16, action: spotify.previous)
+            icon("backward.fill", size: 22, action: spotify.previous)
             Spacer(minLength: 0)
-            icon(spotify.isPlaying ? "pause.fill" : "play.fill", size: 20, action: spotify.playPause)
+            icon(spotify.isPlaying ? "pause.fill" : "play.fill", size: 26, action: spotify.playPause)
             Spacer(minLength: 0)
-            icon("forward.fill", size: 16, action: spotify.next)
+            icon("forward.fill", size: 22, action: spotify.next)
             Spacer(minLength: 0)
-            iconToggle("repeat", on: spotify.isRepeating, action: spotify.toggleRepeat)
+            iconToggle("repeat", on: spotify.isRepeating, size: 15, action: spotify.toggleRepeat)
         }
-        .padding(.horizontal, 4)
+        .padding(.top, 2)
     }
 
     // MARK: - Pieces
@@ -118,7 +126,7 @@ struct NotchView: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: size * 0.2, style: .continuous))
     }
 
     private func icon(_ system: String, size: CGFloat, action: @escaping () -> Void) -> some View {
@@ -130,19 +138,19 @@ struct NotchView: View {
         .buttonStyle(.plain)
     }
 
-    private func iconToggle(_ system: String, on: Bool, action: @escaping () -> Void) -> some View {
+    private func iconToggle(_ system: String, on: Bool, size: CGFloat, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(on ? spotifyGreen : .white.opacity(0.55))
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(on ? spotifyGreen : .white.opacity(0.4))
         }
         .buttonStyle(.plain)
     }
 
     private func timeString(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "00:00" }
+        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
         let t = Int(seconds)
-        return String(format: "%02d:%02d", t / 60, t % 60)
+        return String(format: "%d:%02d", t / 60, t % 60)
     }
 }
 
