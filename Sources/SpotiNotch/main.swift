@@ -45,8 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let notchSize = Self.computeNotch(screen)
         buildPanel(screen, notchSize: notchSize)
 
-        // The widget is always visible, so keep polling Spotify at the faster cadence.
-        spotify.setPopoverOpen(true)
+        // Starts collapsed, so start at the slower poll cadence too (see
+        // setExpanded, which speeds this up while the card is visible).
+        spotify.setPopoverOpen(false)
         registerLoginItem()
         startHoverPolling()
     }
@@ -113,6 +114,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Only accept clicks while expanded, so the collapsed notch never
         // blocks nearby menu bar icons.
         panel.ignoresMouseEvents = !expanded
+        // Nothing is visible while collapsed, so there's no need to poll
+        // Spotify at the fast (1s) cadence — back off to 2s, same as
+        // SpotiWidget does when its popover is closed. Halves the osascript
+        // process spawns during the ~99% of the time nobody's hovering.
+        spotify.setPopoverOpen(expanded)
     }
 
     // MARK: - Window

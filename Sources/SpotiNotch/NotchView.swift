@@ -82,7 +82,14 @@ struct NotchView: View {
         // (matching the technique boring.notch uses for its own slider: derive
         // the live position from elapsed wall-clock time each frame, rather
         // than waiting on a periodic Timer to mutate published state).
-        TimelineView(.animation(minimumInterval: spotify.isPlaying && !spotify.isScrubbing ? 0.1 : nil)) { timeline in
+        // Gated on `state.isExpanded` too — this view stays in the hierarchy
+        // (just faded to opacity 0) while collapsed, so without this check it
+        // would keep redrawing 10x/second in the background any time music is
+        // playing, even though nobody can see it. `paused:` (not a nil
+        // minimumInterval, which would mean "no cap" i.e. every frame) is what
+        // actually stops the ticking.
+        let shouldTick = state.isExpanded && spotify.isPlaying && !spotify.isScrubbing
+        return TimelineView(.animation(minimumInterval: 0.1, paused: !shouldTick)) { timeline in
             let livePosition = spotify.livePosition(at: timeline.date)
 
             HStack(spacing: 8) {
