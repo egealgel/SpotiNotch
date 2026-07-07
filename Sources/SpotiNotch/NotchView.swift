@@ -43,6 +43,8 @@ struct NotchView: View {
             VStack(spacing: 16) {
                 HStack(spacing: 14) {
                     artwork(size: 56)
+                        .id(spotify.title)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     VStack(alignment: .leading, spacing: 3) {
                         titleLine
                         Text(hasTrack ? spotify.album : (spotify.isRunning ? "" : "Spotify isn’t running"))
@@ -50,8 +52,11 @@ struct NotchView: View {
                             .foregroundStyle(.white.opacity(0.5))
                             .lineLimit(1)
                     }
+                    .id(spotify.title)
+                    .transition(.opacity)
                     Spacer(minLength: 0)
                 }
+                .animation(.easeOut(duration: 0.28), value: spotify.title)
 
                 progressBar
                 controls
@@ -81,12 +86,23 @@ struct NotchView: View {
         VStack(spacing: 5) {
             GeometryReader { geo in
                 let frac = spotify.duration > 0 ? min(spotify.position / spotify.duration, 1) : 0
+                let fillWidth = max(0, geo.size.width * frac)
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.22))
                         .frame(height: 4)
                     Capsule().fill(Color.white.opacity(0.85))
-                        .frame(width: max(0, geo.size.width * frac), height: 4)
+                        .frame(width: fillWidth, height: 4)
                         .animation(spotify.isScrubbing ? nil : .linear(duration: 0.25), value: frac)
+                    // A thumb only appears while actively dragging, popping in
+                    // for a tactile "grabbed" feel, and follows the finger 1:1.
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
+                        .offset(x: fillWidth - 6)
+                        .opacity(spotify.isScrubbing ? 1 : 0)
+                        .scaleEffect(spotify.isScrubbing ? 1 : 0.4)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: spotify.isScrubbing)
                 }
                 .frame(maxHeight: .infinity, alignment: .center)
                 .contentShape(Rectangle())
