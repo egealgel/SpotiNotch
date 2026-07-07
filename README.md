@@ -13,6 +13,9 @@ no Premium required.
 https://github.com/user-attachments/assets/8f9a95ce-346c-444b-ad53-eaeab3d70577
 
 
+<img width="1470" height="233" alt="SpotiNotch2" src="https://github.com/user-attachments/assets/30dfa9f5-e00b-4c15-b8c5-c8aa46aa13c9" />
+
+
 ## Features
 
 - Collapsed: blends in as a plain notch — no clutter, doesn't block nearby
