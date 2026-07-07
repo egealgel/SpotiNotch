@@ -211,9 +211,17 @@ final class SpotifyController: ObservableObject {
         end if
         """
 
+        // Stamp the request time *before* the AppleScript round-trip (which can
+        // take 100-200ms) rather than after, so `syncedAt` reflects when Spotify
+        // actually measured `player position`, not when we finished hearing
+        // back about it. Using the post-completion time biased every poll's
+        // baseline by however long that particular call happened to take,
+        // which showed up as the progress bar visibly jumping/correcting itself
+        // each time a new poll landed.
+        let requestTime = Date()
         Task.detached { [weak self] in
             let output = SpotifyController.runScriptSync(script)
-            await self?.apply(output)
+            await self?.apply(output, measuredAt: requestTime)
             await self?.finishPoll()
         }
     }
@@ -229,7 +237,7 @@ final class SpotifyController: ObservableObject {
         }
     }
 
-    private func apply(_ output: String?) {
+    private func apply(_ output: String?, measuredAt requestTime: Date) {
         let text = (output ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
         if text == "notrunning" || text.isEmpty {
@@ -265,7 +273,7 @@ final class SpotifyController: ObservableObject {
         if !isScrubbing {
             position = number(f[6])
             syncedPosition = position
-            syncedAt = Date()
+            syncedAt = requestTime
         }
         if !isAdjustingVolume, Date() >= volumeHoldUntil { volume = number(f[7]) }
 
