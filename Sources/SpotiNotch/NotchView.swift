@@ -43,16 +43,19 @@ struct NotchView: View {
             // Leave the physical notch clear at the top.
             Color.clear.frame(height: notchHeight)
 
-            VStack(spacing: 16) {
+            VStack(spacing: 12) {
                 HStack(spacing: 14) {
-                    artwork(size: 56)
+                    artwork(size: 48)
                         .id(spotify.title)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    VStack(alignment: .leading, spacing: 3) {
-                        titleLine
-                        Text(hasTrack ? spotify.album : (spotify.isRunning ? "" : "Spotify isn’t running"))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(hasTrack ? spotify.title : "Nothing playing")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        Text(hasTrack ? spotify.artist : (spotify.isRunning ? "" : "Spotify isn’t running"))
                             .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundColor(.white.opacity(0.55))
                             .lineLimit(1)
                     }
                     .id(spotify.title)
@@ -65,24 +68,10 @@ struct NotchView: View {
                 controls
             }
             .padding(.horizontal, 20)
-            .padding(.top, 10)
-            .padding(.bottom, 18)
+            .padding(.top, 8)
+            .padding(.bottom, 14)
         }
         .frame(maxWidth: .infinity)
-    }
-
-    /// "Title • Artist" on one line, matching the reference — bold title,
-    /// dimmed separator + artist, truncating together when too long.
-    private var titleLine: some View {
-        (
-            Text(hasTrack ? spotify.title : "Nothing playing")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(.white)
-            + Text(hasTrack ? "  •  \(spotify.artist)" : "")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundColor(.white.opacity(0.55))
-        )
-        .lineLimit(1)
     }
 
     private var progressBar: some View {

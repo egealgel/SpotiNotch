@@ -119,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func buildPanel(_ screen: NSScreen, notchSize: CGSize) {
         let w = max(360, notchSize.width + 92)
-        let h = notchSize.height + 180
+        let h = notchSize.height + 160
         let frame = NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - h, width: w, height: h)
         cardFrame = frame
         notchFrame = NSRect(x: screen.frame.midX - notchSize.width / 2,
