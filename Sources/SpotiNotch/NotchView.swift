@@ -75,7 +75,12 @@ struct NotchView: View {
     }
 
     private var progressBar: some View {
-        VStack(spacing: 5) {
+        HStack(spacing: 8) {
+            Text(timeString(spotify.position))
+                .font(.system(size: 12, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.5))
+
             GeometryReader { geo in
                 let frac = spotify.duration > 0 ? min(spotify.position / spotify.duration, 1) : 0
                 let fillWidth = max(0, geo.size.width * frac)
@@ -118,14 +123,10 @@ struct NotchView: View {
             }
             .frame(height: 20)
 
-            HStack {
-                Text(timeString(spotify.position))
-                Spacer()
-                Text(timeString(spotify.duration))
-            }
-            .font(.system(size: 12, weight: .medium))
-            .monospacedDigit()
-            .foregroundStyle(.white.opacity(0.5))
+            Text(timeString(spotify.duration))
+                .font(.system(size: 12, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.5))
         }
     }
 
