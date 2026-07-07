@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 private let spotifyGreen = Color(red: 0.11, green: 0.73, blue: 0.33)
 
@@ -36,6 +37,14 @@ struct NotchView: View {
                 .animation(.easeOut(duration: state.isExpanded ? 0.32 : 0.16), value: state.isExpanded)
         }
         .frame(width: cardWidth, height: cardHeight, alignment: .top)
+        // Right-click anywhere on the expanded card to quit — the only way to
+        // stop the app used to be deleting it (it's a KeepAlive-style login
+        // item), which isn't a real quit path.
+        .contextMenu {
+            Button("Quit SpotiNotch") {
+                NSApplication.shared.terminate(nil)
+            }
+        }
     }
 
     private var content: some View {
