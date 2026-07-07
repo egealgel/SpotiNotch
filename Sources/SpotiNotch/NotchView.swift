@@ -43,18 +43,18 @@ struct NotchView: View {
             // Leave the physical notch clear at the top.
             Color.clear.frame(height: notchHeight)
 
-            VStack(spacing: 12) {
-                HStack(spacing: 14) {
-                    artwork(size: 48)
+            VStack(spacing: 9) {
+                HStack(spacing: 12) {
+                    artwork(size: 40)
                         .id(spotify.title)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 1) {
                         Text(hasTrack ? spotify.title : "Nothing playing")
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
                             .lineLimit(1)
                         Text(hasTrack ? spotify.artist : (spotify.isRunning ? "" : "Spotify isn’t running"))
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.system(size: 12, weight: .regular))
                             .foregroundColor(.white.opacity(0.55))
                             .lineLimit(1)
                     }
@@ -70,8 +70,8 @@ struct NotchView: View {
                     .padding(.horizontal, 10)
             }
             .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 14)
+            .padding(.top, 6)
+            .padding(.bottom, 10)
         }
         .frame(maxWidth: .infinity)
     }
@@ -149,25 +149,24 @@ struct NotchView: View {
 
     private var controls: some View {
         HStack(spacing: 0) {
-            iconToggle("shuffle", on: spotify.isShuffling, size: 15, action: spotify.toggleShuffle)
+            iconToggle("shuffle", on: spotify.isShuffling, size: 13, action: spotify.toggleShuffle)
             Spacer(minLength: 0)
-            icon("backward.fill", size: 22, action: spotify.previous)
+            icon("backward.fill", size: 19, action: spotify.previous)
             Spacer(minLength: 0)
             playPauseButton
             Spacer(minLength: 0)
-            icon("forward.fill", size: 22, action: spotify.next)
+            icon("forward.fill", size: 19, action: spotify.next)
             Spacer(minLength: 0)
-            iconToggle("repeat", on: spotify.isRepeating, size: 15, action: spotify.toggleRepeat)
+            iconToggle("repeat", on: spotify.isRepeating, size: 13, action: spotify.toggleRepeat)
         }
-        .padding(.top, 2)
     }
 
     /// A dedicated view (rather than reusing `icon`) so the play/pause glyph
     /// can crossfade with a little pop instead of flipping instantly.
     private var playPauseButton: some View {
-        HoverIconButton(system: spotify.isPlaying ? "pause.fill" : "play.fill", size: 23, action: spotify.playPause) {
+        HoverIconButton(system: spotify.isPlaying ? "pause.fill" : "play.fill", size: 20, action: spotify.playPause) {
             Image(systemName: spotify.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 23, weight: .semibold))
+                .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.white)
                 .id(spotify.isPlaying)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
@@ -242,7 +241,7 @@ private struct HoverIconButton<Content: View>: View {
                     .fill(isHovering ? Color.white.opacity(0.14) : .clear)
                 content()
             }
-            .frame(width: size * 2.1, height: size * 2.1)
+            .frame(width: size * 1.9, height: size * 1.9)
             .contentShape(Capsule())
         }
         .buttonStyle(PressableIconStyle())
