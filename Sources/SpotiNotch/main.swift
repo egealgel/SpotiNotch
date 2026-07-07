@@ -73,7 +73,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? service.register()
     }
 
-    // MARK: - Hover polling
+    // Debounce before collapsing, borrowed from boring.notch's ~100ms close
+    // delay: a mouse pass that briefly clips the card edge shouldn't cause a
+    // visible flicker. Opening stays instant — only closing waits.
+    private var outsideSince: Date?
+    private let closeDebounce: TimeInterval = 0.12
 
     /// Checks the real cursor position ~15x/second against `hitFrame`. Cheap
     /// (one point-in-rect test) and immune to the tracking-area pitfalls above.
@@ -85,23 +89,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let wantsExpanded = self.state.isExpanded
                 ? self.cardFrame.contains(mouse)   // already open: generous zone
                 : self.notchFrame.contains(mouse)  // closed: precise trigger
-            if wantsExpanded != self.state.isExpanded {
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    self.state.isExpanded = wantsExpanded
+
+            if wantsExpanded {
+                self.outsideSince = nil
+                if !self.state.isExpanded { self.setExpanded(true) }
+            } else if self.state.isExpanded {
+                let since = self.outsideSince ?? Date()
+                self.outsideSince = since
+                if Date().timeIntervalSince(since) >= self.closeDebounce {
+                    self.outsideSince = nil
+                    self.setExpanded(false)
                 }
-                // Only accept clicks while expanded, so the collapsed notch
-                // never blocks nearby menu bar icons.
-                self.panel.ignoresMouseEvents = !wantsExpanded
             }
             }
         }
         RunLoop.main.add(pollTimer!, forMode: .common)
     }
 
+    private func setExpanded(_ expanded: Bool) {
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+            state.isExpanded = expanded
+        }
+        // Only accept clicks while expanded, so the collapsed notch never
+        // blocks nearby menu bar icons.
+        panel.ignoresMouseEvents = !expanded
+    }
+
     // MARK: - Window
 
     private func buildPanel(_ screen: NSScreen, notchSize: CGSize) {
-        let w = max(400, notchSize.width + 92)
+        let w = max(360, notchSize.width + 92)
         let h = notchSize.height + 180
         let frame = NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - h, width: w, height: h)
         cardFrame = frame

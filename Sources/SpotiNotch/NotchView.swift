@@ -19,7 +19,10 @@ struct NotchView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            BottomRoundedRectangle(radius: state.isExpanded ? 24 : 10)
+            NotchShape(
+                topCornerRadius: state.isExpanded ? 14 : 6,
+                bottomCornerRadius: state.isExpanded ? 24 : 12
+            )
                 .fill(.black)
                 .frame(
                     width: state.isExpanded ? cardWidth : notchWidth,
@@ -218,26 +221,48 @@ private struct PressableIconStyle: ButtonStyle {
     }
 }
 
-/// Rounds only the bottom two corners so the panel looks like it hangs from the
-/// top edge of the screen.
-struct BottomRoundedRectangle: Shape {
-    var radius: CGFloat
-    var animatableData: CGFloat {
-        get { radius }
-        set { radius = newValue }
+/// The classic "notch ear" shape (ported from the open-source boring.notch
+/// project's `NotchShape`): concave curves at the top corners so the panel
+/// flows smoothly out of the physical notch instead of looking like a
+/// separate rectangle, plus ordinary convex rounded corners at the bottom.
+struct NotchShape: Shape {
+    var topCornerRadius: CGFloat
+    var bottomCornerRadius: CGFloat
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(topCornerRadius, bottomCornerRadius) }
+        set { topCornerRadius = newValue.first; bottomCornerRadius = newValue.second }
     }
+
     func path(in rect: CGRect) -> Path {
-        var p = Path()
-        let r = min(radius, min(rect.width, rect.height) / 2)
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
-        p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r,
-                 startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
-        p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
-        p.addArc(center: CGPoint(x: rect.minX + r, y: rect.maxY - r), radius: r,
-                 startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
-        p.closeSubpath()
-        return p
+        var path = Path()
+
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX + topCornerRadius, y: rect.minY + topCornerRadius),
+            control: CGPoint(x: rect.minX + topCornerRadius, y: rect.minY))
+
+        path.addLine(to: CGPoint(x: rect.minX + topCornerRadius, y: rect.maxY - bottomCornerRadius))
+
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX + topCornerRadius + bottomCornerRadius, y: rect.maxY),
+            control: CGPoint(x: rect.minX + topCornerRadius, y: rect.maxY))
+
+        path.addLine(to: CGPoint(x: rect.maxX - topCornerRadius - bottomCornerRadius, y: rect.maxY))
+
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX - topCornerRadius, y: rect.maxY - bottomCornerRadius),
+            control: CGPoint(x: rect.maxX - topCornerRadius, y: rect.maxY))
+
+        path.addLine(to: CGPoint(x: rect.maxX - topCornerRadius, y: rect.minY + topCornerRadius))
+
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY),
+            control: CGPoint(x: rect.maxX - topCornerRadius, y: rect.minY))
+
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+
+        return path
     }
 }
