@@ -13,7 +13,7 @@ MainActor.assumeIsolated {
     app.run()
 }
 
-/// Shared expand/collapse state driven by hover.
+/// Shared expand/collapse state driven by mouse-position polling.
 @MainActor
 final class NotchState: ObservableObject {
     @Published var isExpanded = false
@@ -21,42 +21,39 @@ final class NotchState: ObservableObject {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    // A single panel, created once at the fixed (expanded) size and never
+    // resized. SwiftUI's `.onHover` turned out to be unreliable here: dynamically
+    // toggling `ignoresMouseEvents` (needed so the collapsed notch doesn't block
+    // clicks to nearby menu bar icons) means the window sometimes never gets a
+    // paired "mouse entered" event, so it can silently fail to fire the
+    // matching "exited" — the island can get stuck expanded. Instead we poll
+    // the global mouse location directly, which sidesteps AppKit's
+    // tracking-area/window-activation edge cases entirely.
     private var panel: NSPanel!
     private let spotify = SpotifyController()
     private let state = NotchState()
-    private var cancellables = Set<AnyCancellable>()
-
-    private var notchSize: CGSize = .zero
-    private let sidePad: CGFloat = 46          // room on each side of the notch
-    private let expandedWidth: CGFloat = 380
-    private let expandedDrop: CGFloat = 132     // how far it hangs below the notch
+    private var pollTimer: Timer?
+    // Asymmetric hit-testing, like the iPhone Dynamic Island: a small precise
+    // zone (the notch itself) triggers opening, but once open the much larger
+    // card footprint is what's checked for "did the mouse truly leave" — so
+    // brushing near the edge of the expanded card doesn't instantly close it.
+    private var notchFrame: NSRect = .zero
+    private var cardFrame: NSRect = .zero
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let screen = NSScreen.main else { return }
-        computeNotch(screen)
-        buildPanel(screen)
+        let notchSize = Self.computeNotch(screen)
+        buildPanel(screen, notchSize: notchSize)
 
-        // The widget is always visible, so keep polling at the faster cadence.
+        // The widget is always visible, so keep polling Spotify at the faster cadence.
         spotify.setPopoverOpen(true)
         registerLoginItem()
-
-        state.$isExpanded
-            .removeDuplicates()
-            .sink { [weak self] expanded in
-                guard let self, let screen = NSScreen.main else { return }
-                let target = expanded ? self.expandedFrame(screen) : self.collapsedFrame(screen)
-                NSAnimationContext.runAnimationGroup { ctx in
-                    ctx.duration = 0.34
-                    ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                    self.panel.animator().setFrame(target, display: true)
-                }
-            }
-            .store(in: &cancellables)
+        startHoverPolling()
     }
 
     // MARK: - Geometry
 
-    private func computeNotch(_ screen: NSScreen) {
+    private static func computeNotch(_ screen: NSScreen) -> CGSize {
         let topInset = screen.safeAreaInsets.top
         let height = topInset > 0 ? topInset : 32
         var width: CGFloat = 205
@@ -66,23 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
            left > 0, right > 0 {
             width = screen.frame.width - left - right
         }
-        notchSize = CGSize(width: width, height: height)
+        return CGSize(width: width, height: height)
     }
-
-    private func collapsedFrame(_ screen: NSScreen) -> NSRect {
-        // Match the notch exactly so it blends in as a plain notch.
-        let w = notchSize.width
-        let h = notchSize.height
-        return NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - h, width: w, height: h)
-    }
-
-    private func expandedFrame(_ screen: NSScreen) -> NSRect {
-        let w = max(expandedWidth, notchSize.width + sidePad * 2)
-        let h = notchSize.height + expandedDrop
-        return NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - h, width: w, height: h)
-    }
-
-    // MARK: - Window
 
     /// Opens automatically at login (idempotent), like SpotiWidget.
     private func registerLoginItem() {
@@ -91,8 +73,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? service.register()
     }
 
-    private func buildPanel(_ screen: NSScreen) {
-        let frame = collapsedFrame(screen)
+    // MARK: - Hover polling
+
+    /// Checks the real cursor position ~15x/second against `hitFrame`. Cheap
+    /// (one point-in-rect test) and immune to the tracking-area pitfalls above.
+    private func startHoverPolling() {
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 0.06, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+            guard let self else { return }
+            let mouse = NSEvent.mouseLocation
+            let wantsExpanded = self.state.isExpanded
+                ? self.cardFrame.contains(mouse)   // already open: generous zone
+                : self.notchFrame.contains(mouse)  // closed: precise trigger
+            if wantsExpanded != self.state.isExpanded {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    self.state.isExpanded = wantsExpanded
+                }
+                // Only accept clicks while expanded, so the collapsed notch
+                // never blocks nearby menu bar icons.
+                self.panel.ignoresMouseEvents = !wantsExpanded
+            }
+            }
+        }
+        RunLoop.main.add(pollTimer!, forMode: .common)
+    }
+
+    // MARK: - Window
+
+    private func buildPanel(_ screen: NSScreen, notchSize: CGSize) {
+        let w = max(380, notchSize.width + 92)
+        let h = notchSize.height + 132
+        let frame = NSRect(x: screen.frame.midX - w / 2, y: screen.frame.maxY - h, width: w, height: h)
+        cardFrame = frame
+        notchFrame = NSRect(x: screen.frame.midX - notchSize.width / 2,
+                            y: screen.frame.maxY - notchSize.height,
+                            width: notchSize.width, height: notchSize.height)
+
         panel = NSPanel(contentRect: frame,
                         styleMask: [.borderless, .nonactivatingPanel],
                         backing: .buffered, defer: false)
@@ -103,8 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.hidesOnDeactivate = false
-        panel.ignoresMouseEvents = false
-        panel.acceptsMouseMovedEvents = true
+        panel.ignoresMouseEvents = true   // starts collapsed: fully click-through
 
         let root = NotchView(notchWidth: notchSize.width, notchHeight: notchSize.height)
             .environmentObject(spotify)

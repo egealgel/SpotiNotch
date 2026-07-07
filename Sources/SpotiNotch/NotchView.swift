@@ -2,110 +2,106 @@ import SwiftUI
 
 private let spotifyGreen = Color(red: 0.11, green: 0.73, blue: 0.33)
 
-/// A Dynamic-Island-style widget: a black panel hanging from the notch that
-/// shows a small album-art + equalizer while collapsed, and expands on hover
-/// into full now-playing info with transport controls.
+/// A Dynamic-Island-style widget. The hosting NSWindow is fixed at the card's
+/// full (expanded) size and never resized — `AppDelegate` drives
+/// `state.isExpanded` by polling the real cursor position, not AppKit hover
+/// events, so this view only needs to render each state; it doesn't need to
+/// detect hover itself.
 struct NotchView: View {
     let notchWidth: CGFloat
     let notchHeight: CGFloat
     @EnvironmentObject private var spotify: SpotifyController
     @EnvironmentObject private var state: NotchState
 
+    private let cardWidth: CGFloat = 380
+    private let cardHeight: CGFloat = 172
+
     private var hasTrack: Bool { spotify.isRunning && !spotify.title.isEmpty }
 
     var body: some View {
         ZStack(alignment: .top) {
-            BottomRoundedRectangle(radius: state.isExpanded ? 24 : 10).fill(.black)
+            BottomRoundedRectangle(radius: state.isExpanded ? 24 : 10)
+                .fill(.black)
+                .frame(
+                    width: state.isExpanded ? cardWidth : notchWidth,
+                    height: state.isExpanded ? cardHeight : notchHeight
+                )
 
-            // Collapsed shows nothing — it just blends in as the notch. The full
-            // player only appears when expanded (on hover).
-            if state.isExpanded {
-                expandedBody
-                    .transition(.opacity)
-            }
+            content
+                .opacity(state.isExpanded ? 1 : 0)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .contentShape(Rectangle())
-        .onHover { hovering in
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                state.isExpanded = hovering
-            }
-        }
+        .frame(width: cardWidth, height: cardHeight, alignment: .top)
     }
 
-    // MARK: - Expanded body (revealed on hover, below the notch)
-
-    private var expandedBody: some View {
+    private var content: some View {
         VStack(spacing: 0) {
             // Leave the physical notch clear at the top.
             Color.clear.frame(height: notchHeight)
 
-            VStack(spacing: 10) {
-                HStack(spacing: 12) {
-                    artwork(size: 46)
-                    VStack(alignment: .leading, spacing: 2) {
+            VStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    artwork(size: 40)
+                    VStack(alignment: .leading, spacing: 1) {
                         Text(hasTrack ? spotify.title : "Nothing playing")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                         Text(hasTrack ? spotify.artist : (spotify.isRunning ? "" : "Spotify isn’t running"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.55))
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
                 }
 
-                progressBar
-                controls
+                VStack(spacing: 10) {
+                    progressBar
+                    controls
+                }
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 8)
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
             .padding(.bottom, 14)
         }
         .frame(maxWidth: .infinity)
     }
 
     private var progressBar: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 4) {
             GeometryReader { geo in
                 let frac = spotify.duration > 0 ? min(spotify.position / spotify.duration, 1) : 0
                 ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.18))
-                    Capsule().fill(spotifyGreen)
+                    Capsule().fill(.white.opacity(0.25))
+                    Capsule().fill(Color.white.opacity(0.95))
                         .frame(width: max(0, geo.size.width * frac))
                 }
             }
-            .frame(height: 4)
+            .frame(height: 3)
 
             HStack {
                 Text(timeString(spotify.position))
                 Spacer()
                 Text(timeString(spotify.duration))
             }
-            .font(.system(size: 9, weight: .medium))
+            .font(.system(size: 10, weight: .medium))
             .monospacedDigit()
-            .foregroundStyle(.white.opacity(0.5))
+            .foregroundStyle(.white.opacity(0.55))
         }
     }
 
     private var controls: some View {
-        HStack(spacing: 20) {
+        HStack {
             iconToggle("shuffle", on: spotify.isShuffling, action: spotify.toggleShuffle)
-            icon("backward.fill", size: 15, action: spotify.previous)
-
-            Button(action: spotify.playPause) {
-                Image(systemName: spotify.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.black)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(.white))
-            }
-            .buttonStyle(.plain)
-
-            icon("forward.fill", size: 15, action: spotify.next)
+            Spacer(minLength: 0)
+            icon("backward.fill", size: 16, action: spotify.previous)
+            Spacer(minLength: 0)
+            icon(spotify.isPlaying ? "pause.fill" : "play.fill", size: 20, action: spotify.playPause)
+            Spacer(minLength: 0)
+            icon("forward.fill", size: 16, action: spotify.next)
+            Spacer(minLength: 0)
             iconToggle("repeat", on: spotify.isRepeating, action: spotify.toggleRepeat)
         }
+        .padding(.horizontal, 4)
     }
 
     // MARK: - Pieces
@@ -144,9 +140,9 @@ struct NotchView: View {
     }
 
     private func timeString(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        guard seconds.isFinite, seconds >= 0 else { return "00:00" }
         let t = Int(seconds)
-        return String(format: "%d:%02d", t / 60, t % 60)
+        return String(format: "%02d:%02d", t / 60, t % 60)
     }
 }
 
@@ -173,4 +169,3 @@ struct BottomRoundedRectangle: Shape {
         return p
     }
 }
-
