@@ -1,9 +1,9 @@
 # SpotiNotch
 
 A **Dynamic-Island-style Spotify widget for the MacBook notch**, in native Swift
-+ SwiftUI. It hangs a small black panel from the notch that shows the album art
-and a live equalizer while collapsed, and **expands on hover** into full
-now-playing info with playback controls.
++ SwiftUI. Collapsed, it blends in as a plain notch; **hover over it** and it
+expands into a full now-playing card with artwork, a draggable progress bar,
+and playback controls.
 
 Built on the same AppleScript backend as
 [SpotiWidget](https://github.com/egealgel/SpotiWidget) — no login, no API keys,
@@ -11,9 +11,12 @@ no Premium required.
 
 ## Features
 
-- Sits at the notch and **expands on hover** (Dynamic Island style)
-- Collapsed: album art + animated equalizer flanking the notch
-- Expanded: art, song/artist, progress, and **shuffle / prev / play / next / repeat**
+- Collapsed: blends in as a plain notch — no clutter, doesn't block nearby
+  menu bar icons
+- **Hover to expand** into a card with album art, song/artist, and a
+  concave "notch ear" shape that flows smoothly out of the physical notch
+- Draggable progress bar (seek by dragging), shuffle / prev / play / next /
+  repeat, all with a smooth, continuously-updating time display
 - Works with or without a physical notch (falls back to a top-centre pill)
 - Menu-bar-less, dock-less; **opens at login** automatically
 
@@ -45,7 +48,11 @@ cd SpotiNotch
 
 ## How it works
 
-A borderless, always-on-top `NSPanel` is pinned to the top-centre of the screen
-at the notch. `SpotifyController` polls the Spotify app over `osascript` and
-publishes now-playing state to the SwiftUI `NotchView`, which animates its window
-frame between collapsed and expanded sizes on hover.
+A borderless, always-on-top `NSPanel` is created once at a fixed size and never
+resized; expand/collapse is purely a SwiftUI content animation, driven by
+polling the real cursor position (more reliable here than AppKit's `onHover`,
+which turned out to have edge cases around dynamically toggling
+`ignoresMouseEvents`). `SpotifyController` polls the Spotify app over
+`osascript`, and the progress bar reads a live-interpolated position each
+frame via a `TimelineView` for smooth, continuous motion instead of visible
+steps.
