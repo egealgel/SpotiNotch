@@ -9,6 +9,12 @@ Built on the same AppleScript backend as
 [SpotiWidget](https://github.com/egealgel/SpotiWidget) — no login, no API keys,
 no Premium required.
 
+
+
+https://github.com/user-attachments/assets/fb9fe58a-416e-45dc-8755-6a84a89a252b
+
+
+
 ## Features
 
 - Collapsed: blends in as a plain notch — no clutter, doesn't block nearby
@@ -46,13 +52,3 @@ cd SpotiNotch
 
 `./make-dmg.sh` builds a DMG; `./uninstall.sh` removes the app.
 
-## How it works
-
-A borderless, always-on-top `NSPanel` is created once at a fixed size and never
-resized; expand/collapse is purely a SwiftUI content animation, driven by
-polling the real cursor position (more reliable here than AppKit's `onHover`,
-which turned out to have edge cases around dynamically toggling
-`ignoresMouseEvents`). `SpotifyController` polls the Spotify app over
-`osascript`, and the progress bar reads a live-interpolated position each
-frame via a `TimelineView` for smooth, continuous motion instead of visible
-steps.
