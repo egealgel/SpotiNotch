@@ -10,9 +10,7 @@ Built on the same AppleScript backend as
 no Premium required.
 
 
-
-https://github.com/user-attachments/assets/fb9fe58a-416e-45dc-8755-6a84a89a252b
-
+https://github.com/user-attachments/assets/6fdd9baa-61a3-4f6a-90b7-42c9d2305edd
 
 
 ## Features
