@@ -81,17 +81,17 @@ struct NotchView: View {
                 let fillWidth = max(0, geo.size.width * frac)
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.22))
-                        .frame(height: 4)
+                        .frame(height: 6)
                     Capsule().fill(Color.white.opacity(0.85))
-                        .frame(width: fillWidth, height: 4)
+                        .frame(width: fillWidth, height: 6)
                         .animation(spotify.isScrubbing ? nil : .linear(duration: 0.25), value: frac)
                     // A thumb only appears while actively dragging, popping in
                     // for a tactile "grabbed" feel, and follows the finger 1:1.
                     Circle()
                         .fill(.white)
-                        .frame(width: 12, height: 12)
+                        .frame(width: 14, height: 14)
                         .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
-                        .offset(x: fillWidth - 6)
+                        .offset(x: fillWidth - 7)
                         .opacity(spotify.isScrubbing ? 1 : 0)
                         .scaleEffect(spotify.isScrubbing ? 1 : 0.4)
                         .animation(.spring(response: 0.25, dampingFraction: 0.6), value: spotify.isScrubbing)
@@ -121,7 +121,7 @@ struct NotchView: View {
             HStack {
                 Text(timeString(spotify.position))
                 Spacer()
-                Text("-" + timeString(max(0, spotify.duration - spotify.position)))
+                Text(timeString(spotify.duration))
             }
             .font(.system(size: 12, weight: .medium))
             .monospacedDigit()
@@ -195,9 +195,9 @@ struct NotchView: View {
     }
 
     private func timeString(_ seconds: Double) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        guard seconds.isFinite, seconds >= 0 else { return "00:00" }
         let t = Int(seconds)
-        return String(format: "%d:%02d", t / 60, t % 60)
+        return String(format: "%02d:%02d", t / 60, t % 60)
     }
 }
 
