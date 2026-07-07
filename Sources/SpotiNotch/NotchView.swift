@@ -63,9 +63,11 @@ struct NotchView: View {
                     Spacer(minLength: 0)
                 }
                 .animation(.easeOut(duration: 0.28), value: spotify.title)
+                .padding(.leading, 6)
 
                 progressBar
                 controls
+                    .padding(.horizontal, 10)
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
