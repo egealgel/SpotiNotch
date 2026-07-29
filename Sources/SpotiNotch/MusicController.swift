@@ -135,10 +135,11 @@ final class MusicController: ObservableObject {
 
     // MARK: - Polling
 
-    /// Polls preferred player first, falls back to the other if needed.
-    /// Two separate osascript calls avoid an AppleScript compiler bug when
-    /// both `tell application "Spotify"` and `tell application "Music"`
-    /// appear together and Spotify.app is not installed.
+    /// Polls preferred player first, falls back to the other if idle or
+    /// not installed. Uses NSWorkspace to check if Spotify.app exists
+    /// BEFORE running any AppleScript that references it — osascript
+    /// throws a -2741 compiler error when `tell application "Spotify"`
+    /// is used and the .app bundle has been deleted.
     private func refresh() {
         if isPolling { return }
         isPolling = true
@@ -146,18 +147,32 @@ final class MusicController: ObservableObject {
 
         Task.detached { [weak self] in
             guard let self else { return }
+
+            let spotifyOK = NSWorkspace.shared.urlForApplication(
+                withBundleIdentifier: "com.spotify.client") != nil
+
+            // Pick player: skip Spotify if not installed
             var player = await self.activePlayer
-            var output = Self.runScriptSync(Self.pollScript(for: player))
+            if player == .spotify && !spotifyOK { player = .appleMusic }
+
+            // Poll first choice (only if installed)
+            var output: String? = nil
+            if player == .spotify || player == .appleMusic {
+                output = Self.runScriptSync(Self.pollScript(for: player))
+            }
             var text = (output ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
+            // Fallback to other player
             if text == "notrunning" || text == "stopped" || text.isEmpty {
                 let other: MusicPlayer = player == .spotify ? .appleMusic : .spotify
-                let otherOutput = Self.runScriptSync(Self.pollScript(for: other))
-                let otherText = (otherOutput ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-                if otherText != "notrunning" && otherText != "stopped" && !otherText.isEmpty {
-                    output = otherOutput
-                    player = other
-                    text = otherText
+                if other == .appleMusic || spotifyOK {
+                    let otherOutput = Self.runScriptSync(Self.pollScript(for: other))
+                    let otherText = (otherOutput ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    if otherText != "notrunning" && otherText != "stopped" && !otherText.isEmpty {
+                        output = otherOutput
+                        player = other
+                        text = otherText
+                    }
                 }
             }
 
@@ -176,8 +191,8 @@ final class MusicController: ObservableObject {
 
     // MARK: - AppleScript
 
-    /// Single-player poll script. Never references more than one app to avoid
-    /// an AppleScript compiler bug that occurs when Spotify.app is deleted.
+    /// Poll script for a single player only. Never references more than
+    /// one application to avoid osascript compiler bugs.
     private nonisolated static func pollScript(for player: MusicPlayer) -> String {
         switch player {
         case .spotify:
