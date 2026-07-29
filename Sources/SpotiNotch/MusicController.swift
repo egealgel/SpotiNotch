@@ -3,42 +3,31 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Which music player is currently being controlled.
 enum MusicPlayer {
     case spotify
     case appleMusic
 }
 
-/// Talks to Spotify or Apple Music over AppleScript (via `osascript`) and
-/// publishes now-playing state for the SwiftUI views to observe.
 @MainActor
 final class MusicController: ObservableObject {
-    // Now-playing state
     @Published var isRunning = false
     @Published var isPlaying = false
     @Published var title = ""
     @Published var artist = ""
-    @Published var position: Double = 0      // seconds
-    @Published var duration: Double = 0      // seconds
+    @Published var position: Double = 0
+    @Published var duration: Double = 0
     @Published var isShuffling = false
     @Published var isRepeating = false
     @Published var artwork: NSImage?
 
-    /// Track whether the user is dragging the progress bar.
     var isScrubbing = false
-
-    /// The currently active player, updated every poll based on which app is
-    /// actually playing.
     private(set) var activePlayer: MusicPlayer = .spotify
 
     private var trackID = ""
     private var pollTimer: Timer?
     private var tickTimer: Timer?
-
-    // For smooth local interpolation of the progress bar between polls.
     private var syncedPosition: Double = 0
     private var syncedAt = Date()
-
     private var lastSeekSent = Date.distantPast
     private var playStateHoldUntil = Date.distantPast
     private var shuffleRepeatHoldUntil = Date.distantPast
@@ -50,7 +39,6 @@ final class MusicController: ObservableObject {
         configureTimers()
     }
 
-    /// The popover reports its visibility so we can back off when it's closed.
     func setPopoverOpen(_ open: Bool) {
         guard open != isPopoverOpen else { return }
         isPopoverOpen = open
@@ -60,8 +48,7 @@ final class MusicController: ObservableObject {
 
     private func configureTimers() {
         pollTimer?.invalidate()
-        let interval: TimeInterval = isPopoverOpen ? 1.0 : 2.0
-        let poll = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+        let poll = Timer(timeInterval: isPopoverOpen ? 1.0 : 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
         RunLoop.main.add(poll, forMode: .common)
@@ -78,14 +65,12 @@ final class MusicController: ObservableObject {
         }
     }
 
-    /// Moves the progress bar forward locally between polls.
     private func interpolate() {
         guard isPlaying, !isScrubbing, duration > 0 else { return }
         let elapsed = Date().timeIntervalSince(syncedAt)
         position = min(syncedPosition + elapsed, duration)
     }
 
-    /// Computes live playback position for TimelineView (smooth progress bar).
     func livePosition(at date: Date = Date()) -> Double {
         guard isPlaying, !isScrubbing, duration > 0 else { return position }
         let elapsed = date.timeIntervalSince(syncedAt)
@@ -132,18 +117,14 @@ final class MusicController: ObservableObject {
 
     func seek(to seconds: Double) {
         let s = max(0, seconds)
-        position = s
-        syncedPosition = s
-        syncedAt = Date()
+        position = s; syncedPosition = s; syncedAt = Date()
         let app = activePlayer == .spotify ? "Spotify" : "Music"
         run("tell application \"\(app)\" to set player position to \(Int(s))")
     }
 
     func seekLive(_ seconds: Double) {
         let s = max(0, seconds)
-        position = s
-        syncedPosition = s
-        syncedAt = Date()
+        position = s; syncedPosition = s; syncedAt = Date()
         let now = Date()
         if now.timeIntervalSince(lastSeekSent) > 0.15 {
             lastSeekSent = now
@@ -154,17 +135,34 @@ final class MusicController: ObservableObject {
 
     // MARK: - Polling
 
-    /// Runs one osascript that checks both players and returns the state of
-    /// whichever has the highest priority (playing > paused > stopped).
+    /// Polls preferred player first, falls back to the other if needed.
+    /// Two separate osascript calls avoid an AppleScript compiler bug when
+    /// both `tell application "Spotify"` and `tell application "Music"`
+    /// appear together and Spotify.app is not installed.
     private func refresh() {
         if isPolling { return }
         isPolling = true
         let requestTime = Date()
 
         Task.detached { [weak self] in
-            let output = Self.runScriptSync(Self.unifiedPollScript())
-            await self?.applyUnified(output, measuredAt: requestTime)
-            await self?.finishPoll()
+            guard let self else { return }
+            var player = await self.activePlayer
+            var output = Self.runScriptSync(Self.pollScript(for: player))
+            var text = (output ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if text == "notrunning" || text == "stopped" || text.isEmpty {
+                let other: MusicPlayer = player == .spotify ? .appleMusic : .spotify
+                let otherOutput = Self.runScriptSync(Self.pollScript(for: other))
+                let otherText = (otherOutput ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                if otherText != "notrunning" && otherText != "stopped" && !otherText.isEmpty {
+                    output = otherOutput
+                    player = other
+                    text = otherText
+                }
+            }
+
+            await self.apply(output, measuredAt: requestTime, player: player)
+            await self.finishPoll()
         }
     }
 
@@ -178,89 +176,52 @@ final class MusicController: ObservableObject {
 
     // MARK: - AppleScript
 
-    /// One script checking both players. Priority: playing > paused > stopped.
-    /// Returns a tagged first line ("SPOTIFY" / "MUSIC" / "SPOTIFY_STOPPED" /
-    /// "MUSIC_STOPPED" / "notrunning") + 10 data fields.
-    private nonisolated static func unifiedPollScript() -> String {
-        return """
-        -- ── Spotify (playing) ──
-        if application "Spotify" is running then
-            tell application "Spotify"
-                set spState to player state as string
-                if spState is "playing" then
-                    set spName to name of current track
-                    set spArtist to artist of current track
-                    set spArt to artwork url of current track
-                    set spDur to duration of current track
-                    set spPos to player position
-                    set spID to id of current track
-                    set spShuffle to shuffling
-                    set spRepeat to repeating
-                    return "SPOTIFY" & "\\n" & spState & "\\n" & spName & "\\n" & spArtist & "\\n" & spArt & "\\n" & spDur & "\\n" & spPos & "\\n" & spID & "\\n" & spShuffle & "\\n" & spRepeat
-                end if
-            end tell
-        end if
-
-        -- ── Music (playing) ──
-        if application "Music" is running then
-            tell application "Music"
-                set amState to player state as string
-                if amState is "playing" then
-                    set amName to name of current track
-                    set amArtist to artist of current track
-                    set amDur to duration of current track
-                    set amPos to player position
-                    set amID to database ID of current track
-                    set amShuffle to shuffle enabled
-                    set amRepeat to song repeat as string
-                    return "MUSIC" & "\\n" & amState & "\\n" & amName & "\\n" & amArtist & "\\n" & "no-url" & "\\n" & amDur & "\\n" & amPos & "\\n" & amID & "\\n" & amShuffle & "\\n" & amRepeat
-                end if
-            end tell
-        end if
-
-        -- ── Spotify (paused) ──
-        if application "Spotify" is running then
-            tell application "Spotify"
-                set spState to player state as string
-                if spState is "paused" then
-                    set spName to name of current track
-                    set spArtist to artist of current track
-                    set spArt to artwork url of current track
-                    set spDur to duration of current track
-                    set spPos to player position
-                    set spID to id of current track
-                    set spShuffle to shuffling
-                    set spRepeat to repeating
-                    return "SPOTIFY" & "\\n" & spState & "\\n" & spName & "\\n" & spArtist & "\\n" & spArt & "\\n" & spDur & "\\n" & spPos & "\\n" & spID & "\\n" & spShuffle & "\\n" & spRepeat
-                end if
-            end tell
-        end if
-
-        -- ── Music (paused) ──
-        if application "Music" is running then
-            tell application "Music"
-                set amState to player state as string
-                if amState is "paused" then
-                    set amName to name of current track
-                    set amArtist to artist of current track
-                    set amDur to duration of current track
-                    set amPos to player position
-                    set amID to database ID of current track
-                    set amShuffle to shuffle enabled
-                    set amRepeat to song repeat as string
-                    return "MUSIC" & "\\n" & amState & "\\n" & amName & "\\n" & amArtist & "\\n" & "no-url" & "\\n" & amDur & "\\n" & amPos & "\\n" & amID & "\\n" & amShuffle & "\\n" & amRepeat
-                end if
-            end tell
-        end if
-
-        -- ── Neither playing nor paused ──
-        if application "Spotify" is running then return "SPOTIFY_STOPPED"
-        if application "Music" is running then return "MUSIC_STOPPED"
-        return "notrunning"
-        """
+    /// Single-player poll script. Never references more than one app to avoid
+    /// an AppleScript compiler bug that occurs when Spotify.app is deleted.
+    private nonisolated static func pollScript(for player: MusicPlayer) -> String {
+        switch player {
+        case .spotify:
+            return """
+            if application "Spotify" is running then
+                tell application "Spotify"
+                    set playerState to player state as string
+                    if playerState is "stopped" then return "stopped"
+                    set trackName to name of current track
+                    set trackArtist to artist of current track
+                    set trackArt to artwork url of current track
+                    set trackDur to duration of current track
+                    set trackPos to player position
+                    set trackID to id of current track
+                    set trackShuffle to shuffling
+                    set trackRepeat to repeating
+                    return playerState & "\\n" & trackName & "\\n" & trackArtist & "\\n" & trackArt & "\\n" & trackDur & "\\n" & trackPos & "\\n" & trackID & "\\n" & trackShuffle & "\\n" & trackRepeat
+                end tell
+            else
+                return "notrunning"
+            end if
+            """
+        case .appleMusic:
+            return """
+            if application "Music" is running then
+                tell application "Music"
+                    set playerState to player state as string
+                    if playerState is "stopped" then return "stopped"
+                    set trackName to name of current track
+                    set trackArtist to artist of current track
+                    set trackDur to duration of current track
+                    set trackPos to player position
+                    set trackID to database ID of current track
+                    set trackShuffle to shuffle enabled
+                    set trackRepeat to song repeat as string
+                    return playerState & "\\n" & trackName & "\\n" & trackArtist & "\\n" & "no-url" & "\\n" & trackDur & "\\n" & trackPos & "\\n" & trackID & "\\n" & trackShuffle & "\\n" & trackRepeat
+                end tell
+            else
+                return "notrunning"
+            end if
+            """
+        }
     }
 
-    /// Runs a simple command against the active player.
     private func run(commandScript: String) {
         let app = activePlayer == .spotify ? "Spotify" : "Music"
         run("tell application \"\(app)\" to \(commandScript)")
@@ -268,68 +229,51 @@ final class MusicController: ObservableObject {
 
     // MARK: - State application
 
-    /// Parses the unified poll output. First line is the player tag;
-    /// lines 2-11 are: state, title, artist, artURL, duration, position,
-    /// trackID, shuffle, repeat.
-    private func applyUnified(_ output: String?, measuredAt requestTime: Date) {
+    private func apply(_ output: String?, measuredAt requestTime: Date, player: MusicPlayer) {
         let text = (output ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
         if text == "notrunning" || text.isEmpty {
-            isRunning = false
+            isRunning = false; isPlaying = false
+            title = ""; artist = ""
+            position = 0; duration = 0
+            artwork = nil; trackID = ""
+            return
+        }
+
+        isRunning = true
+
+        if text == "stopped" {
+            activePlayer = player
             isPlaying = false
             title = ""; artist = ""
             position = 0; duration = 0
-            artwork = nil
-            trackID = ""
-            return
-        }
-
-        if text == "SPOTIFY_STOPPED" {
-            activePlayer = .spotify
-            isRunning = true; isPlaying = false
-            title = ""; artist = ""
-            position = 0; duration = 0
-            artwork = nil; trackID = ""
-            return
-        }
-        if text == "MUSIC_STOPPED" {
-            activePlayer = .appleMusic
-            isRunning = true; isPlaying = false
-            title = ""; artist = ""
-            position = 0; duration = 0
             artwork = nil; trackID = ""
             return
         }
 
-        // Full data: player tag + 9 fields = 10 lines total
         let f = text.components(separatedBy: "\n")
-        guard f.count >= 10 else { return }
+        guard f.count >= 9 else { return }
 
-        let playerTag = f[0]
-        let player: MusicPlayer = playerTag == "MUSIC" ? .appleMusic : .spotify
         activePlayer = player
-        isRunning = true
 
-        if Date() >= playStateHoldUntil { isPlaying = (f[1] == "playing") }
-        title = f[2]
-        artist = f[3]
-        let artField = f[4]
-        let rawDur = number(f[5])
+        if Date() >= playStateHoldUntil { isPlaying = (f[0] == "playing") }
+        title = f[1]
+        artist = f[2]
+        let artField = f[3]
+        let rawDur = number(f[4])
         duration = player == .spotify ? rawDur / 1000.0 : rawDur
         if !isScrubbing {
-            position = number(f[6])
+            position = number(f[5])
             syncedPosition = position
             syncedAt = requestTime
         }
 
-        // f[0]=tag, f[1]=state, f[2]=title, f[3]=artist, f[4]=artURL,
-        // f[5]=dur, f[6]=pos, f[7]=id, f[8]=shuffle, f[9]=repeat
-        if f.count >= 10, Date() >= shuffleRepeatHoldUntil {
-            isShuffling = (f[8] == "true")
-            isRepeating = player == .appleMusic ? (f[9] != "off") : (f[9] == "true")
+        if f.count >= 9, Date() >= shuffleRepeatHoldUntil {
+            isShuffling = (f[7] == "true")
+            isRepeating = player == .appleMusic ? (f[8] != "off") : (f[8] == "true")
         }
 
-        let newTrackID = f[7]
+        let newTrackID = f[6]
         if newTrackID != trackID {
             trackID = newTrackID
             if player == .spotify {
@@ -342,7 +286,6 @@ final class MusicController: ObservableObject {
 
     // MARK: - Artwork
 
-    /// Spotify: load from URL string returned in the poll.
     private func loadArtwork(from urlString: String) {
         guard let url = URL(string: urlString) else { artwork = nil; return }
         Task.detached { [weak self] in
@@ -352,7 +295,6 @@ final class MusicController: ObservableObject {
         }
     }
 
-    /// Apple Music: write artwork to temp file via osascript, read in Swift.
     private func loadAppleMusicArtwork() {
         Task.detached { [weak self] in
             guard let image = Self.fetchAppleMusicArtworkSync() else { return }
@@ -360,9 +302,7 @@ final class MusicController: ObservableObject {
         }
     }
 
-    private func setArtwork(_ image: NSImage) {
-        artwork = image
-    }
+    private func setArtwork(_ image: NSImage) { artwork = image }
 
     nonisolated static func fetchAppleMusicArtworkSync() -> NSImage? {
         let tmpPath = NSTemporaryDirectory() + "spotinotch_art_\(UUID().uuidString)"
@@ -402,7 +342,6 @@ final class MusicController: ObservableObject {
         Task.detached { _ = Self.runScriptSync(script) }
     }
 
-    /// Runs an AppleScript via `osascript` and returns stdout.
     nonisolated static func runScriptSync(_ script: String) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -421,7 +360,7 @@ final class MusicController: ObservableObject {
             }
             return out
         } catch {
-            FileHandle.standardError.write(Data("[SpotiNotch] osascript launch failed: \(error)\n".utf8))
+            FileHandle.standardError.write(Data("[SpotiNotch] launch failed: \(error)\n".utf8))
             return nil
         }
     }
