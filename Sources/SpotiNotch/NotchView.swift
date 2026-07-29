@@ -13,10 +13,10 @@ struct NotchView: View {
     let notchHeight: CGFloat
     let cardWidth: CGFloat
     let cardHeight: CGFloat
-    @EnvironmentObject private var spotify: SpotifyController
+    @EnvironmentObject private var controller: MusicController
     @EnvironmentObject private var state: NotchState
 
-    private var hasTrack: Bool { spotify.isRunning && !spotify.title.isEmpty }
+    private var hasTrack: Bool { controller.isRunning && !controller.title.isEmpty }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -55,23 +55,23 @@ struct NotchView: View {
             VStack(spacing: 9) {
                 HStack(spacing: 12) {
                     artwork(size: 40)
-                        .id(spotify.title)
+                        .id(controller.title)
                         .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(hasTrack ? spotify.title : "Nothing playing")
+                        Text(hasTrack ? controller.title : "Nothing playing")
                             .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
                             .lineLimit(1)
-                        Text(hasTrack ? spotify.artist : (spotify.isRunning ? "" : "Spotify isn’t running"))
+                        Text(hasTrack ? controller.artist : (controller.isRunning ? "" : "No music app running"))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundColor(.white.opacity(0.55))
                             .lineLimit(1)
                     }
-                    .id(spotify.title)
+                    .id(controller.title)
                     .transition(.opacity)
                     Spacer(minLength: 0)
                 }
-                .animation(.easeOut(duration: 0.28), value: spotify.title)
+                .animation(.easeOut(duration: 0.28), value: controller.title)
                 .padding(.leading, 6)
 
                 progressBar
@@ -97,9 +97,9 @@ struct NotchView: View {
         // playing, even though nobody can see it. `paused:` (not a nil
         // minimumInterval, which would mean "no cap" i.e. every frame) is what
         // actually stops the ticking.
-        let shouldTick = state.isExpanded && spotify.isPlaying && !spotify.isScrubbing
+        let shouldTick = state.isExpanded && controller.isPlaying && !controller.isScrubbing
         return TimelineView(.animation(minimumInterval: 0.1, paused: !shouldTick)) { timeline in
-            let livePosition = spotify.livePosition(at: timeline.date)
+            let livePosition = controller.livePosition(at: timeline.date)
 
             HStack(spacing: 8) {
                 Text(timeString(livePosition))
@@ -108,7 +108,7 @@ struct NotchView: View {
                     .foregroundStyle(.white.opacity(0.5))
 
                 GeometryReader { geo in
-                    let frac = spotify.duration > 0 ? min(livePosition / spotify.duration, 1) : 0
+                    let frac = controller.duration > 0 ? min(livePosition / controller.duration, 1) : 0
                     let fillWidth = max(0, geo.size.width * frac)
                     ZStack(alignment: .leading) {
                         Capsule().fill(.white.opacity(0.22))
@@ -122,9 +122,9 @@ struct NotchView: View {
                             .frame(width: 14, height: 14)
                             .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
                             .offset(x: fillWidth - 7)
-                            .opacity(spotify.isScrubbing ? 1 : 0)
-                            .scaleEffect(spotify.isScrubbing ? 1 : 0.4)
-                            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: spotify.isScrubbing)
+                            .opacity(controller.isScrubbing ? 1 : 0)
+                            .scaleEffect(controller.isScrubbing ? 1 : 0.4)
+                            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: controller.isScrubbing)
                     }
                     .frame(maxHeight: .infinity, alignment: .center)
                     .contentShape(Rectangle())
@@ -133,22 +133,22 @@ struct NotchView: View {
                         // track is comfortable to grab and drag.
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
-                                guard spotify.duration > 0 else { return }
-                                spotify.isScrubbing = true
+                                guard controller.duration > 0 else { return }
+                                controller.isScrubbing = true
                                 let frac = min(max(0, value.location.x / geo.size.width), 1)
-                                spotify.seekLive(frac * spotify.duration)
+                                controller.seekLive(frac * controller.duration)
                             }
                             .onEnded { value in
-                                guard spotify.duration > 0 else { return }
+                                guard controller.duration > 0 else { return }
                                 let frac = min(max(0, value.location.x / geo.size.width), 1)
-                                spotify.seek(to: frac * spotify.duration)
-                                spotify.isScrubbing = false
+                                controller.seek(to: frac * controller.duration)
+                                controller.isScrubbing = false
                             }
                     )
                 }
                 .frame(height: 20)
 
-                Text(timeString(spotify.duration))
+                Text(timeString(controller.duration))
                     .font(.system(size: 12, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.5))
@@ -158,36 +158,36 @@ struct NotchView: View {
 
     private var controls: some View {
         HStack(spacing: 0) {
-            iconToggle("shuffle", on: spotify.isShuffling, size: 13, action: spotify.toggleShuffle)
+            iconToggle("shuffle", on: controller.isShuffling, size: 13, action: controller.toggleShuffle)
             Spacer(minLength: 0)
-            icon("backward.fill", size: 19, action: spotify.previous)
+            icon("backward.fill", size: 19, action: controller.previous)
             Spacer(minLength: 0)
             playPauseButton
             Spacer(minLength: 0)
-            icon("forward.fill", size: 19, action: spotify.next)
+            icon("forward.fill", size: 19, action: controller.next)
             Spacer(minLength: 0)
-            iconToggle("repeat", on: spotify.isRepeating, size: 13, action: spotify.toggleRepeat)
+            iconToggle("repeat", on: controller.isRepeating, size: 13, action: controller.toggleRepeat)
         }
     }
 
     /// A dedicated view (rather than reusing `icon`) so the play/pause glyph
     /// can crossfade with a little pop instead of flipping instantly.
     private var playPauseButton: some View {
-        HoverIconButton(system: spotify.isPlaying ? "pause.fill" : "play.fill", size: 20, action: spotify.playPause) {
-            Image(systemName: spotify.isPlaying ? "pause.fill" : "play.fill")
+        HoverIconButton(system: controller.isPlaying ? "pause.fill" : "play.fill", size: 20, action: controller.playPause) {
+            Image(systemName: controller.isPlaying ? "pause.fill" : "play.fill")
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.white)
-                .id(spotify.isPlaying)
+                .id(controller.isPlaying)
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: spotify.isPlaying)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: controller.isPlaying)
     }
 
     // MARK: - Pieces
 
     private func artwork(size: CGFloat) -> some View {
         Group {
-            if let img = spotify.artwork {
+            if let img = controller.artwork {
                 Image(nsImage: img).resizable().aspectRatio(contentMode: .fill)
             } else {
                 ZStack {

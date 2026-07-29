@@ -30,7 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // the global mouse location directly, which sidesteps AppKit's
     // tracking-area/window-activation edge cases entirely.
     private var panel: NSPanel!
-    private let spotify = SpotifyController()
+    private let musicController = MusicController()
     private let state = NotchState()
     private var pollTimer: Timer?
     // Asymmetric hit-testing, like the iPhone Dynamic Island: a small precise
@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Starts collapsed, so start at the slower poll cadence too (see
         // setExpanded, which speeds this up while the card is visible).
-        spotify.setPopoverOpen(false)
+        musicController.setPopoverOpen(false)
         registerLoginItem()
         startHoverPolling()
     }
@@ -118,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Spotify at the fast (1s) cadence — back off to 2s, same as
         // SpotiWidget does when its popover is closed. Halves the osascript
         // process spawns during the ~99% of the time nobody's hovering.
-        spotify.setPopoverOpen(expanded)
+        musicController.setPopoverOpen(expanded)
     }
 
     // MARK: - Window
@@ -146,7 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let root = NotchView(notchWidth: notchSize.width, notchHeight: notchSize.height,
                              cardWidth: w, cardHeight: h)
-            .environmentObject(spotify)
+            .environmentObject(musicController)
             .environmentObject(state)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = panel.contentView!.bounds
