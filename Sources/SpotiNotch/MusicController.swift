@@ -77,27 +77,27 @@ final class MusicController: ObservableObject {
         return min(syncedPosition + elapsed, duration)
     }
 
-    // MARK: - Commands
+    // MARK: - Commands (all guarded — never launch a closed app)
 
     func playPause() {
         isPlaying.toggle()
         if isPlaying { syncedPosition = position; syncedAt = Date() }
         playStateHoldUntil = Date().addingTimeInterval(0.6)
-        run(commandScript: "playpause")
+        runIfRunning("playpause")
         refreshSoon()
     }
 
-    func next()         { run(commandScript: "next track"); refreshSoon() }
-    func previous()     { run(commandScript: "previous track"); refreshSoon() }
+    func next()         { runIfRunning("next track"); refreshSoon() }
+    func previous()     { runIfRunning("previous track"); refreshSoon() }
 
     func toggleShuffle() {
         isShuffling.toggle()
         shuffleRepeatHoldUntil = Date().addingTimeInterval(0.6)
         switch activePlayer {
         case .spotify:
-            run("tell application \"Spotify\" to set shuffling to \(isShuffling)")
+            runIfRunning("set shuffling to \(isShuffling)")
         case .appleMusic:
-            run("tell application \"Music\" to set shuffle enabled to \(isShuffling)")
+            runIfRunning("set shuffle enabled to \(isShuffling)")
         }
         refreshSoon()
     }
@@ -107,10 +107,10 @@ final class MusicController: ObservableObject {
         shuffleRepeatHoldUntil = Date().addingTimeInterval(0.6)
         switch activePlayer {
         case .spotify:
-            run("tell application \"Spotify\" to set repeating to \(isRepeating)")
+            runIfRunning("set repeating to \(isRepeating)")
         case .appleMusic:
             let mode = isRepeating ? "all" : "off"
-            run("tell application \"Music\" to set song repeat to \(mode)")
+            runIfRunning("set song repeat to \(mode)")
         }
         refreshSoon()
     }
@@ -118,8 +118,7 @@ final class MusicController: ObservableObject {
     func seek(to seconds: Double) {
         let s = max(0, seconds)
         position = s; syncedPosition = s; syncedAt = Date()
-        let app = activePlayer == .spotify ? "Spotify" : "Music"
-        run("tell application \"\(app)\" to set player position to \(Int(s))")
+        runIfRunning("set player position to \(Int(s))")
     }
 
     func seekLive(_ seconds: Double) {
@@ -128,18 +127,27 @@ final class MusicController: ObservableObject {
         let now = Date()
         if now.timeIntervalSince(lastSeekSent) > 0.15 {
             lastSeekSent = now
-            let app = activePlayer == .spotify ? "Spotify" : "Music"
-            run("tell application \"\(app)\" to set player position to \(Int(s))")
+            runIfRunning("set player position to \(Int(s))")
         }
+    }
+
+    /// Runs a command only if the active player is actually running.
+    /// Prevents AppleScript from auto-launching a closed music app.
+    private func runIfRunning(_ commandScript: String) {
+        let app = activePlayer == .spotify ? "Spotify" : "Music"
+        let script = """
+        if application "\(app)" is running then
+            tell application "\(app)" to \(commandScript)
+        end if
+        """
+        run(script)
     }
 
     // MARK: - Polling
 
     /// Polls preferred player first, falls back to the other if idle or
     /// not installed. Uses NSWorkspace to check if Spotify.app exists
-    /// BEFORE running any AppleScript that references it — osascript
-    /// throws a -2741 compiler error when `tell application "Spotify"`
-    /// is used and the .app bundle has been deleted.
+    /// BEFORE running any AppleScript that references it.
     private func refresh() {
         if isPolling { return }
         isPolling = true
@@ -151,18 +159,15 @@ final class MusicController: ObservableObject {
             let spotifyOK = NSWorkspace.shared.urlForApplication(
                 withBundleIdentifier: "com.spotify.client") != nil
 
-            // Pick player: skip Spotify if not installed
             var player = await self.activePlayer
             if player == .spotify && !spotifyOK { player = .appleMusic }
 
-            // Poll first choice (only if installed)
             var output: String? = nil
             if player == .spotify || player == .appleMusic {
                 output = Self.runScriptSync(Self.pollScript(for: player))
             }
             var text = (output ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
 
-            // Fallback to other player
             if text == "notrunning" || text == "stopped" || text.isEmpty {
                 let other: MusicPlayer = player == .spotify ? .appleMusic : .spotify
                 if other == .appleMusic || spotifyOK {
@@ -191,8 +196,6 @@ final class MusicController: ObservableObject {
 
     // MARK: - AppleScript
 
-    /// Poll script for a single player only. Never references more than
-    /// one application to avoid osascript compiler bugs.
     private nonisolated static func pollScript(for player: MusicPlayer) -> String {
         switch player {
         case .spotify:
@@ -235,11 +238,6 @@ final class MusicController: ObservableObject {
             end if
             """
         }
-    }
-
-    private func run(commandScript: String) {
-        let app = activePlayer == .spotify ? "Spotify" : "Music"
-        run("tell application \"\(app)\" to \(commandScript)")
     }
 
     // MARK: - State application
