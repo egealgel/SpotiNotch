@@ -1,7 +1,8 @@
 import SwiftUI
 import AppKit
 
-private let spotifyGreen = Color(red: 0.11, green: 0.73, blue: 0.33)
+// (spotifyGreen removed — shuffle/repeat now use Dynamic Island-style bold
+// white instead of green, matching the clean monochrome aesthetic.)
 
 /// A Dynamic-Island-style widget. The hosting NSWindow is fixed at the card's
 /// full (expanded) size and never resized — `AppDelegate` drives
@@ -97,8 +98,12 @@ struct NotchView: View {
         // playing, even though nobody can see it. `paused:` (not a nil
         // minimumInterval, which would mean "no cap" i.e. every frame) is what
         // actually stops the ticking.
+        // 0.2s (5fps) is plenty smooth for a progress bar and halves the
+        // TimelineView redraw load vs 0.1s, which matters because the
+        // per-second osascript poll + SwiftUI redraws compete for CPU and
+        // caused visible hitches.
         let shouldTick = state.isExpanded && controller.isPlaying && !controller.isScrubbing
-        return TimelineView(.animation(minimumInterval: 0.1, paused: !shouldTick)) { timeline in
+        return TimelineView(.animation(minimumInterval: 0.2, paused: !shouldTick)) { timeline in
             let livePosition = controller.livePosition(at: timeline.date)
 
             HStack(spacing: 8) {
@@ -148,7 +153,9 @@ struct NotchView: View {
                 }
                 .frame(height: 20)
 
-                Text(timeString(controller.duration))
+                // Remaining time, counting down like the iPhone Dynamic Island
+                // (e.g. "-2:31" → "-2:30" → ...). Clamped so it can't go negative.
+                Text("-" + timeString(max(0, controller.duration - livePosition)))
                     .font(.system(size: 12, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.5))
@@ -208,11 +215,13 @@ struct NotchView: View {
         }
     }
 
+    /// Shuffle / repeat toggle rendered Dynamic-Island-style: bold white when
+    /// active, subtle dimmed when off. No green — clean monochrome aesthetic.
     private func iconToggle(_ system: String, on: Bool, size: CGFloat, action: @escaping () -> Void) -> some View {
         HoverIconButton(system: system, size: size, action: action) {
             Image(systemName: system)
-                .font(.system(size: size, weight: .semibold))
-                .foregroundStyle(on ? spotifyGreen : .white.opacity(0.4))
+                .font(.system(size: size, weight: on ? .heavy : .regular))
+                .foregroundStyle(on ? .white : .white.opacity(0.3))
                 .animation(.easeOut(duration: 0.18), value: on)
         }
     }

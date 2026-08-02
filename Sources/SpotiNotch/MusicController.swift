@@ -25,7 +25,6 @@ final class MusicController: ObservableObject {
 
     private var trackID = ""
     private var pollTimer: Timer?
-    private var tickTimer: Timer?
     private var syncedPosition: Double = 0
     private var syncedAt = Date()
     private var lastSeekSent = Date.distantPast
@@ -35,6 +34,12 @@ final class MusicController: ObservableObject {
     private var isPopoverOpen = false
 
     init() {
+        // Pick a sensible default so the very first command (e.g. an early
+        // "previous" click) targets the right app even before the first poll
+        // completes. If Spotify isn't installed, default to Apple Music.
+        if NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") == nil {
+            activePlayer = .appleMusic
+        }
         refresh()
         configureTimers()
     }
@@ -43,7 +48,14 @@ final class MusicController: ObservableObject {
         guard open != isPopoverOpen else { return }
         isPopoverOpen = open
         configureTimers()
-        if open { refresh() }
+        if open {
+            // Rebase interpolation now so the bar starts advancing from the
+            // real current position instead of extrapolating from a stale
+            // closed-state poll (which caused a visible jump/snap).
+            syncedPosition = position
+            syncedAt = Date()
+            refresh()
+        }
     }
 
     private func configureTimers() {
@@ -53,23 +65,13 @@ final class MusicController: ObservableObject {
         }
         RunLoop.main.add(poll, forMode: .common)
         pollTimer = poll
+// TimelineView drives the live position display now
+// (5 fps via .animation(minimumInterval: 0.2)).
+// A separate interpolation timer is redundant and doubled CPU.
+// `position` still updates on each poll so other code paths
+// (playPause, setPopoverOpen) have a recent snapshot.
+}
 
-        tickTimer?.invalidate()
-        tickTimer = nil
-        if isPopoverOpen {
-            let tick = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
-                Task { @MainActor in self?.interpolate() }
-            }
-            RunLoop.main.add(tick, forMode: .common)
-            tickTimer = tick
-        }
-    }
-
-    private func interpolate() {
-        guard isPlaying, !isScrubbing, duration > 0 else { return }
-        let elapsed = Date().timeIntervalSince(syncedAt)
-        position = min(syncedPosition + elapsed, duration)
-    }
 
     func livePosition(at date: Date = Date()) -> Double {
         guard isPlaying, !isScrubbing, duration > 0 else { return position }
@@ -87,8 +89,27 @@ final class MusicController: ObservableObject {
         refreshSoon()
     }
 
-    func next()         { runIfRunning("next track"); refreshSoon() }
-    func previous()     { runIfRunning("previous track"); refreshSoon() }
+    /// Resets playback state so the progress bar doesn't keep extrapolating
+    /// the previous track's position while the new track loads. The next poll
+    /// (~1s later) repopulates the real data.
+    private func resetForTrackChange() {
+        isPlaying = true
+        position = 0
+        duration = 0
+        syncedPosition = 0
+        syncedAt = Date()
+    }
+
+    func next() {
+        runIfRunning("next track")
+        resetForTrackChange()
+        refreshSoon()
+    }
+    func previous() {
+        runIfRunning("previous track")
+        resetForTrackChange()
+        refreshSoon()
+    }
 
     func toggleShuffle() {
         isShuffling.toggle()
@@ -132,8 +153,14 @@ final class MusicController: ObservableObject {
     }
 
     /// Runs a command only if the active player is actually running.
-    /// Prevents AppleScript from auto-launching a closed music app.
+    /// Prevents AppleScript from auto-launching a closed music app, and
+    /// redirects to the other player when the current target isn't installed.
     private func runIfRunning(_ commandScript: String) {
+        // If the target app isn't even installed, prefer the other player.
+        let targetBundle = activePlayer == .spotify ? "com.spotify.client" : "com.apple.Music"
+        if NSWorkspace.shared.urlForApplication(withBundleIdentifier: targetBundle) == nil {
+            activePlayer = activePlayer == .spotify ? .appleMusic : .spotify
+        }
         let app = activePlayer == .spotify ? "Spotify" : "Music"
         let script = """
         if application "\(app)" is running then
@@ -278,7 +305,7 @@ final class MusicController: ObservableObject {
         if !isScrubbing {
             position = number(f[5])
             syncedPosition = position
-            syncedAt = requestTime
+            syncedAt = Date()       // "now", so the bar continues from here without snapping
         }
 
         if f.count >= 9, Date() >= shuffleRepeatHoldUntil {
