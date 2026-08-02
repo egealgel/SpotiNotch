@@ -42,7 +42,7 @@ struct NotchView: View {
         // stop the app used to be deleting it (it's a KeepAlive-style login
         // item), which isn't a real quit path.
         .contextMenu {
-            Button("Quit SpotiNotch") {
+            Button("Quit DynamicNotch") {
                 NSApplication.shared.terminate(nil)
             }
         }
@@ -216,13 +216,23 @@ struct NotchView: View {
     }
 
     /// Shuffle / repeat toggle rendered Dynamic-Island-style: bold white when
-    /// active, subtle dimmed when off. No green — clean monochrome aesthetic.
+    /// active, subtle dimmed when off. Active state gets a soft rounded glow
+    /// (halo) behind the icon — like the iPhone Dynamic Island's active control.
     private func iconToggle(_ system: String, on: Bool, size: CGFloat, action: @escaping () -> Void) -> some View {
         HoverIconButton(system: system, size: size, action: action) {
-            Image(systemName: system)
-                .font(.system(size: size, weight: on ? .heavy : .regular))
-                .foregroundStyle(on ? .white : .white.opacity(0.3))
-                .animation(.easeOut(duration: 0.18), value: on)
+            ZStack {
+                // Soft rounded halo that fades in when the toggle is active.
+                Capsule()
+                    .fill(.white.opacity(0.14))
+                    .shadow(color: .white.opacity(0.55), radius: 5, y: 0)
+                    .opacity(on ? 1 : 0)
+                    .scaleEffect(on ? 1 : 0.7)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.7), value: on)
+                Image(systemName: system)
+                    .font(.system(size: size, weight: on ? .heavy : .regular))
+                    .foregroundStyle(on ? .white : .white.opacity(0.3))
+                    .animation(.easeOut(duration: 0.18), value: on)
+            }
         }
     }
 

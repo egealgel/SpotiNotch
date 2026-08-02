@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# Builds a distributable SpotiNotch.dmg (app + /Applications shortcut).
+# Builds a distributable DynamicNotch.dmg (app + /Applications shortcut).
 #
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP_NAME="SpotiNotch"
-BUNDLE_ID="com.spotinotch.app"
+APP_NAME="DynamicNotch"
+BUNDLE_ID="com.dynamicnotch.app"
 DMG="$APP_NAME.dmg"
 
 echo "==> Building release binary…"
@@ -31,4 +31,4 @@ hdiutil create -volname "$APP_NAME" -srcfolder "$STAGING" -ov -format UDZO "$DMG
 
 echo ""
 echo "Done: $(pwd)/$DMG"
-echo "Open it, drag SpotiNotch into Applications, then launch it once."
+echo "Open it, drag DynamicNotch into Applications, then launch it once."

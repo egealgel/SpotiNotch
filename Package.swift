@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "SpotiNotch",
+    name: "DynamicNotch",
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(
-            name: "SpotiNotch",
-            path: "Sources/SpotiNotch"
+            name: "DynamicNotch",
+            path: "Sources/DynamicNotch"
         )
     ]
 )

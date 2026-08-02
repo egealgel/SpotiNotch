@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>SpotiNotch</string>
+    <string>DynamicNotch</string>
     <key>CFBundleIdentifier</key>
-    <string>com.spotinotch.app</string>
+    <string>com.dynamicnotch.app</string>
     <key>CFBundleName</key>
-    <string>SpotiNotch</string>
+    <string>DynamicNotch</string>
     <key>CFBundleDisplayName</key>
-    <string>SpotiNotch</string>
+    <string>DynamicNotch</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundlePackageType</key>
@@ -23,6 +23,6 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSAppleEventsUsageDescription</key>
-    <string>SpotiNotch controls Spotify or Apple Music to show and manage what's playing.</string>
+    <string>DynamicNotch controls Spotify or Apple Music to show and manage what's playing.</string>
 </dict>
 </plist>

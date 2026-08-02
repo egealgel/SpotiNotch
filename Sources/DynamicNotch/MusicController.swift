@@ -345,7 +345,7 @@ final class MusicController: ObservableObject {
     private func setArtwork(_ image: NSImage) { artwork = image }
 
     nonisolated static func fetchAppleMusicArtworkSync() -> NSImage? {
-        let tmpPath = NSTemporaryDirectory() + "spotinotch_art_\(UUID().uuidString)"
+        let tmpPath = NSTemporaryDirectory() + "dynamicnotch_art_\(UUID().uuidString)"
         let script = """
         tell application "Music"
             try
@@ -396,11 +396,11 @@ final class MusicController: ObservableObject {
             let out = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
             let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
             if !err.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                FileHandle.standardError.write(Data("[SpotiNotch] osascript error: \(err)".utf8))
+                FileHandle.standardError.write(Data("[DynamicNotch] osascript error: \(err)".utf8))
             }
             return out
         } catch {
-            FileHandle.standardError.write(Data("[SpotiNotch] launch failed: \(error)\n".utf8))
+            FileHandle.standardError.write(Data("[DynamicNotch] launch failed: \(error)\n".utf8))
             return nil
         }
     }

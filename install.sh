@@ -6,8 +6,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP_NAME="SpotiNotch"
-BUNDLE_ID="com.spotinotch.app"
+APP_NAME="DynamicNotch"
+BUNDLE_ID="com.dynamicnotch.app"
 APP_DIR="/Applications/$APP_NAME.app"
 
 echo "==> Building release binary…"
@@ -31,7 +31,7 @@ open "$APP_DIR"
 
 echo ""
 echo "Done. $APP_NAME now hangs from your notch. Hover it to expand."
-echo "It registered itself to open at login. First time it controls Spotify,"
-echo "allow the Automation prompt."
+echo "It registered itself to open at login. First time it controls your music"
+echo "app (Spotify or Apple Music), allow the Automation prompt."
 echo ""
 echo "To uninstall:  ./uninstall.sh"
