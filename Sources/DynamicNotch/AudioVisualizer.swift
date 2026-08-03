@@ -74,7 +74,7 @@ final class AudioVisualizer: ObservableObject {
 /// runs on a real-time audio thread; it only mutates the FFT scratch buffers
 /// and publishes band levels under a lock.
 final class AudioTapEngine {
-    static let bandCount = 6
+    static let bandCount = 4
     static let fftSize = 2048
     private static let minLevel: Float = 0.08
     private static let silencePeakThreshold: Float = 1e-4

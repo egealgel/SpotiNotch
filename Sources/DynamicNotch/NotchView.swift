@@ -273,15 +273,15 @@ struct NotchView: View {
     }
 
     private var realTimeEqualizer: some View {
-        HStack(alignment: .center, spacing: 2.5) {
+        HStack(alignment: .center, spacing: 2) {
             ForEach(0..<audio.levels.count, id: \.self) { i in
                 Capsule()
                     .fill(.white.opacity(controller.isPlaying ? 0.9 : 0.3))
-                    .frame(width: 2.5, height: 12)
+                    .frame(width: 2, height: 12)
                     .scaleEffect(x: 1, y: max(0.3, audio.levels[i]), anchor: .center)
             }
         }
-        .frame(width: 28, height: 12)
+        .frame(width: 16, height: 12)
         .opacity(controller.isPlaying ? 1 : 0.5)
         .animation(.easeInOut(duration: 0.3), value: controller.isPlaying)
     }
@@ -292,23 +292,23 @@ struct NotchView: View {
         // cycles — just like the progress bar).
         let ticking = state.isExpanded && !audio.isActive
         return TimelineView(.animation(minimumInterval: 0.12, paused: !ticking)) { timeline in
-            HStack(alignment: .center, spacing: 2.5) {
+            HStack(alignment: .center, spacing: 2) {
                 ForEach(0..<AudioTapEngine.bandCount, id: \.self) { i in
                     Capsule()
                         .fill(.white.opacity(controller.isPlaying && hasTrack ? 0.9 : 0.4))
-                        .frame(width: 2.5, height: 12)
+                        .frame(width: 2, height: 12)
                         .scaleEffect(x: 1, y: animatedLevel(i, at: timeline.date), anchor: .center)
                 }
             }
-            .frame(width: 28, height: 12)
+            .frame(width: 16, height: 12)
         }
     }
 
     /// Deterministic per-bar sine walk for the non-reactive fallback equalizer.
     private func animatedLevel(_ index: Int, at date: Date) -> CGFloat {
         let t = date.timeIntervalSinceReferenceDate
-        let phases: [Double] = [0.0, 2.1, 4.2, 1.1, 3.3, 5.4]
-        let speeds: [Double] = [1.7, 2.3, 1.2, 2.8, 1.9, 2.5]
+        let phases: [Double] = [0.0, 2.1, 4.2, 1.1]
+        let speeds: [Double] = [1.7, 2.3, 1.2, 2.8]
         let v = 0.5 + 0.5 * sin(t * speeds[index % speeds.count] + phases[index % phases.count])
         return CGFloat(0.35 + 0.65 * v)
     }
