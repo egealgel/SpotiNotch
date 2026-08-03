@@ -72,6 +72,7 @@ struct NotchView: View {
                     .id(controller.title)
                     .transition(.opacity)
                     Spacer(minLength: 0)
+                    visualizer
                 }
                 .animation(.easeOut(duration: 0.28), value: controller.title)
                 .padding(.leading, 6)
@@ -153,11 +154,6 @@ struct NotchView: View {
                     )
                 }
                 .frame(height: 20)
-
-                // Equalizer pinned above the remaining-time label (Dynamic Island
-                // style: waveform sits at the trailing edge of the progress row).
-                visualizer
-                    .padding(.leading, 2)
 
                 // Remaining time, counting down like the iPhone Dynamic Island
                 // (e.g. "-2:31" → "-2:30" → ...). Clamped so it can't go negative.
