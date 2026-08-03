@@ -71,10 +71,8 @@ struct NotchView: View {
                     }
                     .id(controller.title)
                     .transition(.opacity)
+                    Spacer(minLength: 8)
                     visualizer
-                        .id(controller.title)
-                        .transition(.opacity)
-                    Spacer(minLength: 0)
                 }
                 .animation(.easeOut(duration: 0.28), value: controller.title)
                 .padding(.leading, 6)
