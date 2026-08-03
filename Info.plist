@@ -24,5 +24,7 @@
     <true/>
     <key>NSAppleEventsUsageDescription</key>
     <string>DynamicNotch controls Spotify or Apple Music to show and manage what's playing.</string>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>DynamicNotch analyzes audio to show a live rhythm visualizer when you hover over the notch.</string>
 </dict>
 </plist>

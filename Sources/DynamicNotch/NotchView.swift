@@ -16,6 +16,7 @@ struct NotchView: View {
     let cardHeight: CGFloat
     @EnvironmentObject private var controller: MusicController
     @EnvironmentObject private var state: NotchState
+    @EnvironmentObject private var audio: AudioVisualizer
 
     private var hasTrack: Bool { controller.isRunning && !controller.title.isEmpty }
 
@@ -70,6 +71,9 @@ struct NotchView: View {
                     }
                     .id(controller.title)
                     .transition(.opacity)
+                    visualizer
+                        .id(controller.title)
+                        .transition(.opacity)
                     Spacer(minLength: 0)
                 }
                 .animation(.easeOut(duration: 0.28), value: controller.title)
@@ -240,6 +244,72 @@ struct NotchView: View {
         guard seconds.isFinite, seconds >= 0 else { return "00:00" }
         let t = Int(seconds)
         return String(format: "%02d:%02d", t / 60, t % 60)
+    }
+
+    // MARK: - Equalizer (Dynamic Island style)
+    //
+    // Three modes, in order of preference:
+    //   1. Real-time  — driven by the actual audio of the playing app via the
+    //      CoreAudio process tap (AudioVisualizer). Reacts to the track's real
+    //      rhythm, exactly like the Dynamic Island.
+    //   2. Animated   — lightweight deterministic fallback (boring.notch's
+    //      shipped look) when the tap API is unavailable (< macOS 14.2), no
+    //      supported player is running, or the tap couldn't start. Each bar
+    //      oscillates on its own sine phase so it still looks alive.
+    //   3. Resting    — paused / no track: bars sit at minimum height.
+
+    private var visualizer: some View {
+        Group {
+            if audio.isActive {
+                realTimeEqualizer
+            } else {
+                // Always animate the fallback when expanded — boring.notch
+                // ships this by default; it looks alive even when no real
+                // audio tap is available.
+                animatedEqualizer
+            }
+        }
+    }
+
+    private var realTimeEqualizer: some View {
+        HStack(alignment: .center, spacing: 2.5) {
+            ForEach(0..<audio.levels.count, id: \.self) { i in
+                Capsule()
+                    .fill(.white.opacity(controller.isPlaying ? 0.9 : 0.3))
+                    .frame(width: 2.5, height: 12)
+                    .scaleEffect(x: 1, y: max(0.3, audio.levels[i]), anchor: .center)
+            }
+        }
+        .frame(width: 20, height: 12)
+        .opacity(controller.isPlaying ? 1 : 0.5)
+        .animation(.easeInOut(duration: 0.3), value: controller.isPlaying)
+    }
+
+    private var animatedEqualizer: some View {
+        // Tick continuously while the card is expanded (the content is hidden
+        // behind opacity 0 when collapsed, so we gate on expanded here to save
+        // cycles — just like the progress bar).
+        let ticking = state.isExpanded && !audio.isActive
+        return TimelineView(.animation(minimumInterval: 0.12, paused: !ticking)) { timeline in
+            HStack(alignment: .center, spacing: 2.5) {
+                ForEach(0..<AudioTapEngine.bandCount, id: \.self) { i in
+                    Capsule()
+                        .fill(.white.opacity(controller.isPlaying && hasTrack ? 0.9 : 0.4))
+                        .frame(width: 2.5, height: 12)
+                        .scaleEffect(x: 1, y: animatedLevel(i, at: timeline.date), anchor: .center)
+                }
+            }
+            .frame(width: 20, height: 12)
+        }
+    }
+
+    /// Deterministic per-bar sine walk for the non-reactive fallback equalizer.
+    private func animatedLevel(_ index: Int, at date: Date) -> CGFloat {
+        let t = date.timeIntervalSinceReferenceDate
+        let phases: [Double] = [0.0, 2.1, 4.2, 1.1, 3.3, 5.4]
+        let speeds: [Double] = [1.7, 2.3, 1.2, 2.8, 1.9, 2.5]
+        let v = 0.5 + 0.5 * sin(t * speeds[index % speeds.count] + phases[index % phases.count])
+        return CGFloat(0.35 + 0.65 * v)
     }
 }
 

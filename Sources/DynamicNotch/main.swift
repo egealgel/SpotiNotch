@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: NSPanel!
     private let musicController = MusicController()
     private let state = NotchState()
+    private let audioVisualizer = AudioVisualizer()
     private var pollTimer: Timer?
     // Asymmetric hit-testing, like the iPhone Dynamic Island: a small precise
     // zone (the notch itself) triggers opening, but once open the much larger
@@ -115,10 +116,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // blocks nearby menu bar icons.
         panel.ignoresMouseEvents = !expanded
         // Nothing is visible while collapsed, so there's no need to poll
-        // Spotify at the fast (1s) cadence — back off to 2s, same as
-        // SpotiWidget does when its popover is closed. Halves the osascript
-        // process spawns during the ~99% of the time nobody's hovering.
+        // Spotify at the fast cadence — back off to a sparse safety-net timer,
+        // same idea as before but now driven mainly by playback notifications.
         musicController.setPopoverOpen(expanded)
+        // The audio tap (real-time waveform) only runs while the card is
+        // expanded; it's torn down the moment the user looks away.
+        if expanded {
+            audioVisualizer.start()
+        } else {
+            audioVisualizer.stop()
+        }
     }
 
     // MARK: - Window
@@ -148,6 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                              cardWidth: w, cardHeight: h)
             .environmentObject(musicController)
             .environmentObject(state)
+            .environmentObject(audioVisualizer)
         let hosting = NSHostingView(rootView: root)
         hosting.frame = panel.contentView!.bounds
         hosting.autoresizingMask = [.width, .height]
