@@ -72,12 +72,15 @@ struct NotchView: View {
                     .id(controller.title)
                     .transition(.opacity)
                     Spacer(minLength: 0)
-                    visualizer
                 }
                 .animation(.easeOut(duration: 0.28), value: controller.title)
                 .padding(.leading, 6)
 
                 progressBar
+                    .overlay(alignment: .topTrailing) {
+                        visualizer
+                            .offset(y: -18)
+                    }
                 controls
                     .padding(.horizontal, 10)
             }
@@ -278,7 +281,7 @@ struct NotchView: View {
                     .scaleEffect(x: 1, y: max(0.3, audio.levels[i]), anchor: .center)
             }
         }
-        .frame(width: 20, height: 12)
+        .frame(width: 28, height: 12)
         .opacity(controller.isPlaying ? 1 : 0.5)
         .animation(.easeInOut(duration: 0.3), value: controller.isPlaying)
     }
@@ -297,7 +300,7 @@ struct NotchView: View {
                         .scaleEffect(x: 1, y: animatedLevel(i, at: timeline.date), anchor: .center)
                 }
             }
-            .frame(width: 20, height: 12)
+            .frame(width: 28, height: 12)
         }
     }
 
