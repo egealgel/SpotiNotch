@@ -24,7 +24,8 @@ final class MusicController: ObservableObject {
     private(set) var activePlayer: MusicPlayer = .spotify
 
     private var trackID = ""
-    private var pollTimer: Timer?
+    private var fallbackTimer: Timer?
+    private var notificationObservers: [NSObjectProtocol] = []
     private var syncedPosition: Double = 0
     private var syncedAt = Date()
     private var lastSeekSent = Date.distantPast
@@ -35,19 +36,20 @@ final class MusicController: ObservableObject {
 
     init() {
         // Pick a sensible default so the very first command (e.g. an early
-        // "previous" click) targets the right app even before the first poll
-        // completes. If Spotify isn't installed, default to Apple Music.
+        // "previous" click) targets the right app even before the first
+        // snapshot completes. If Spotify isn't installed, default to Apple Music.
         if NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.spotify.client") == nil {
             activePlayer = .appleMusic
         }
+        observePlaybackNotifications()
+        configureFallbackTimer()
         refresh()
-        configureTimers()
     }
 
     func setPopoverOpen(_ open: Bool) {
         guard open != isPopoverOpen else { return }
         isPopoverOpen = open
-        configureTimers()
+        configureFallbackTimer()
         if open {
             // Rebase interpolation now so the bar starts advancing from the
             // real current position instead of extrapolating from a stale
@@ -58,19 +60,56 @@ final class MusicController: ObservableObject {
         }
     }
 
-    private func configureTimers() {
-        pollTimer?.invalidate()
-        let poll = Timer(timeInterval: isPopoverOpen ? 1.0 : 2.0, repeats: true) { [weak self] _ in
+    /// Registers for the players' own DistributedNotificationCenter events —
+    /// Spotify posts `com.spotify.client.PlaybackStateChanged`, Apple Music
+    /// posts `com.apple.Music.playerInfo` (legacy iTunes name still observed
+    /// too) — so we only ask AppleScript for a full snapshot when something
+    /// actually changed, instead of polling every second. Each event triggers
+    /// one `refresh()`; `isPolling` coalesces bursts (e.g. rapid seeks).
+    /// This is the same notification-driven approach boring.notch / Atoll use.
+    private func observePlaybackNotifications() {
+        let names = [
+            "com.spotify.client.PlaybackStateChanged",
+            "com.apple.Music.playerInfo",
+            "com.apple.iTunes.playerInfo",
+        ]
+        let center = DistributedNotificationCenter.default()
+        for name in names {
+            let observer = center.addObserver(
+                forName: NSNotification.Name(name),
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.refresh() }
+            }
+            notificationObservers.append(observer)
+        }
+    }
+
+    /// Safety-net timer. Playback notifications don't cover every lifecycle
+    /// change (e.g. quitting a paused player, or the other player taking over
+    /// mid-session), so a sparse fallback keeps `isRunning` and the snapshot
+    /// honest. 10s closed / 5s expanded is a ~10-20x reduction in osascript
+    /// spawns vs the old 1-2s polling, and the visible bar is driven by
+    /// TimelineView wall-clock interpolation anyway, so nothing visual depends
+    /// on this cadence. `position` still updates here so other code paths
+    /// (playPause, setPopoverOpen) have a recent snapshot.
+    private func configureFallbackTimer() {
+        fallbackTimer?.invalidate()
+        let interval: TimeInterval = isPopoverOpen ? 5.0 : 10.0
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
-        RunLoop.main.add(poll, forMode: .common)
-        pollTimer = poll
-// TimelineView drives the live position display now
-// (5 fps via .animation(minimumInterval: 0.2)).
-// A separate interpolation timer is redundant and doubled CPU.
-// `position` still updates on each poll so other code paths
-// (playPause, setPopoverOpen) have a recent snapshot.
-}
+        RunLoop.main.add(timer, forMode: .common)
+        fallbackTimer = timer
+    }
+
+    deinit {
+        fallbackTimer?.invalidate()
+        for observer in notificationObservers {
+            DistributedNotificationCenter.default().removeObserver(observer)
+        }
+    }
 
 
     func livePosition(at date: Date = Date()) -> Double {

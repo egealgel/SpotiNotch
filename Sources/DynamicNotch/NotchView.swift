@@ -87,21 +87,21 @@ struct NotchView: View {
     }
 
     private var progressBar: some View {
-        // Redraws up to 10x/second so the fill and the elapsed-time label
-        // advance continuously instead of visibly stepping once every 0.25s
-        // (matching the technique boring.notch uses for its own slider: derive
-        // the live position from elapsed wall-clock time each frame, rather
-        // than waiting on a periodic Timer to mutate published state).
+        // TimelineView interpolates the live position from wall-clock time each
+        // frame (the same technique boring.notch uses for its slider: elapsed
+        // time + delta since the last snapshot, rather than a Timer mutating
+        // published state). State only needs to change when a real playback
+        // event arrives via DistributedNotificationCenter (see MusicController.
+        // observePlaybackNotifications), so nothing here depends on polling.
         // Gated on `state.isExpanded` too — this view stays in the hierarchy
         // (just faded to opacity 0) while collapsed, so without this check it
-        // would keep redrawing 10x/second in the background any time music is
+        // would keep redrawing 5x/second in the background any time music is
         // playing, even though nobody can see it. `paused:` (not a nil
         // minimumInterval, which would mean "no cap" i.e. every frame) is what
         // actually stops the ticking.
-        // 0.2s (5fps) is plenty smooth for a progress bar and halves the
-        // TimelineView redraw load vs 0.1s, which matters because the
-        // per-second osascript poll + SwiftUI redraws compete for CPU and
-        // caused visible hitches.
+        // 0.2s (5fps) is plenty smooth for a progress bar and keeps the redraw
+        // load to a minimum; the remaining-time label below is derived from the
+        // same single livePosition so it always matches the fill exactly.
         let shouldTick = state.isExpanded && controller.isPlaying && !controller.isScrubbing
         return TimelineView(.animation(minimumInterval: 0.2, paused: !shouldTick)) { timeline in
             let livePosition = controller.livePosition(at: timeline.date)
