@@ -8,9 +8,11 @@ A **Dynamic-Island-style music widget for the MacBook notch**, in native Swift
 
 Built on an AppleScript backend — no login, no API keys, no Premium required.
 
-https://github.com/user-attachments/assets/8f9a95ce-346c-444b-ad53-eaeab3d70577
+https://github.com/user-attachments/assets/83abcf88-af4f-4881-845d-0f127a183fd0
 
-<img width="1470" height="233" alt="DynamicNotch" src="https://github.com/user-attachments/assets/30dfa9f5-e00b-4c15-b8c5-c8aa46aa13c9" />
+<img width="1470" height="225" alt="dynamic notch v3" src="https://github.com/user-attachments/assets/c571551e-1711-4af5-ad65-2613354123c4" />
+
+
 
 ## Features
 
